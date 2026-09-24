@@ -1,10 +1,15 @@
 import enum
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, Enum, String
-from sqlalchemy.orm import Mapped, mapped_column,relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-from app.models.team_member import TeamMember
+
+if TYPE_CHECKING:
+    from app.models.task import Task
+    from app.models.team_member import TeamMember
+
 
 class UserRole(enum.StrEnum):
     ADMIN = "ADMIN"
@@ -43,8 +48,18 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=True,
     )
-    
+
     team_memberships: Mapped[list["TeamMember"]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+
+    created_tasks: Mapped[list["Task"]] = relationship(
+        foreign_keys="Task.created_by",
+        back_populates="creator",
+    )
+
+    assigned_tasks: Mapped[list["Task"]] = relationship(
+        foreign_keys="Task.assignee_id",
+        back_populates="assignee",
     )

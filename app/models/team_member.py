@@ -1,10 +1,16 @@
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.team import Team
+    from app.models.user import User
+
 
 class TeamMember(Base):
     __tablename__ = "team_members"
