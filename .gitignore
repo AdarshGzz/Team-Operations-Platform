@@ -1,0 +1,5 @@
+.env
+.venv
+.commandcode
+team_operations_platform.egg-info
+*.egg-info
