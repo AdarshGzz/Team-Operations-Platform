@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from app.models.task_event import TaskEvent
     from app.models.team import Team
     from app.models.user import User
 
@@ -88,6 +89,11 @@ class Task(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     assignee: Mapped["User | None"] = relationship(
         foreign_keys=[assignee_id],
         back_populates="assigned_tasks",
+    )
+
+    events: Mapped[list["TaskEvent"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
