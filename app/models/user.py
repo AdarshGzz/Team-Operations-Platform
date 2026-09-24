@@ -1,10 +1,10 @@
 import enum
 
 from sqlalchemy import Boolean, Enum, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column,relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-
+from app.models.team_member import TeamMember
 
 class UserRole(enum.StrEnum):
     ADMIN = "ADMIN"
@@ -42,4 +42,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         Boolean,
         nullable=False,
         default=True,
+    )
+    
+    team_memberships: Mapped[list["TeamMember"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
     )
