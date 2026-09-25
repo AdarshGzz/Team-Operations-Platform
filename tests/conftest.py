@@ -1,13 +1,13 @@
 import os
 from collections.abc import AsyncGenerator
+from types import SimpleNamespace
 from typing import Any
-
-from app.core.security import hash_password
-from app.models.user import User, UserRole
+from uuid import UUID
 
 import pytest_asyncio
 from dotenv import load_dotenv
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import (
     AsyncConnection,
     AsyncSession,
@@ -16,7 +16,10 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.api.deps import get_db_session
+from app.core.security import hash_password
 from app.main import app
+from app.models.task import Task
+from app.models.user import User, UserRole
 
 load_dotenv()
 
@@ -170,3 +173,104 @@ async def create_user(db_session: AsyncSession):
         return user
 
     return _create_user
+
+
+@pytest_asyncio.fixture
+async def team_context(
+    client: AsyncClient,
+    create_user,
+    login_user,
+    auth_headers,
+) -> SimpleNamespace:
+    """
+    A team owned by an admin, with a manager and a member
+    already added to it.
+    """
+
+    admin = await create_user(
+        email="lifecycle-admin@example.com",
+        role=UserRole.ADMIN,
+        name="Lifecycle Admin",
+    )
+
+    manager = await create_user(
+        email="lifecycle-manager@example.com",
+        role=UserRole.MANAGER,
+        name="Lifecycle Manager",
+    )
+
+    member = await create_user(
+        email="lifecycle-member@example.com",
+        role=UserRole.MEMBER,
+        name="Lifecycle Member",
+    )
+
+    admin_token = await login_user(email=admin.email)
+
+    response = await client.post(
+        "/teams",
+        json={
+            "name": "Lifecycle Team",
+        },
+        headers=auth_headers(admin_token),
+    )
+
+    assert response.status_code == 201
+
+    team_id = response.json()["id"]
+
+    for user in (manager, member):
+        membership_response = await client.post(
+            f"/teams/{team_id}/members/{user.id}",
+            headers=auth_headers(admin_token),
+        )
+
+        assert membership_response.status_code == 201
+
+    return SimpleNamespace(
+        admin=admin,
+        manager=manager,
+        member=member,
+        team_id=team_id,
+        admin_token=admin_token,
+        manager_token=await login_user(email=manager.email),
+        member_token=await login_user(email=member.email),
+        auth_headers=auth_headers,
+    )
+
+
+@pytest_asyncio.fixture
+async def manager_token(team_context: SimpleNamespace) -> str:
+    return team_context.manager_token
+
+
+@pytest_asyncio.fixture
+async def task(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    team_context: SimpleNamespace,
+) -> Task:
+    """
+    A task created by the team manager, returned as the ORM model
+    so tests can inspect and mutate it directly.
+    """
+
+    response = await client.post(
+        f"/teams/{team_context.team_id}/tasks",
+        json={
+            "title": "Lifecycle Task",
+        },
+        headers=team_context.auth_headers(team_context.manager_token),
+    )
+
+    assert response.status_code == 201
+
+    task_id = UUID(response.json()["id"])
+
+    result = await db_session.execute(
+        select(Task).where(
+            Task.id == task_id,
+        )
+    )
+
+    return result.scalar_one()

@@ -24,9 +24,7 @@ async def require_team_access(
     Returns the requested Team after authorization succeeds.
     """
 
-    result = await db.execute(
-        select(Team).where(Team.id == team_id)
-    )
+    result = await db.execute(select(Team).where(Team.id == team_id))
 
     team = result.scalar_one_or_none()
 
