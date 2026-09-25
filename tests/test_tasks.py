@@ -1,13 +1,9 @@
-import pytest
-
-
-@pytest.mark.asyncio
-async def test_task_creation_creates_created_event(
+def test_task_creation_creates_created_event(
     client,
     member_token,
     team_id,
 ):
-    response = await client.post(
+    response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -23,7 +19,7 @@ async def test_task_creation_creates_created_event(
 
     task = response.json()
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -43,14 +39,13 @@ async def test_task_creation_creates_created_event(
     assert events[0]["payload"]["priority"] == "HIGH"
 
 
-@pytest.mark.asyncio
-async def test_task_creation_with_assignee_creates_assigned_event(
+def test_task_creation_with_assignee_creates_assigned_event(
     client,
     member_token,
     team_id,
     member_id,
 ):
-    response = await client.post(
+    response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -65,7 +60,7 @@ async def test_task_creation_with_assignee_creates_assigned_event(
 
     task = response.json()
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -84,14 +79,13 @@ async def test_task_creation_with_assignee_creates_assigned_event(
     assert events[1]["payload"]["assignee_id"] == str(member_id)
 
 
-@pytest.mark.asyncio
-async def test_task_update_creates_updated_event(
+def test_task_update_creates_updated_event(
     client,
     member_token,
     team_id,
     member_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -107,7 +101,7 @@ async def test_task_update_creates_updated_event(
 
     task = create_response.json()
 
-    update_response = await client.patch(
+    update_response = client.patch(
         f"/tasks/{task['id']}",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -120,7 +114,7 @@ async def test_task_update_creates_updated_event(
 
     assert update_response.status_code == 200
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -141,15 +135,14 @@ async def test_task_update_creates_updated_event(
     assert events[2]["payload"]["priority"] == "HIGH"
 
 
-@pytest.mark.asyncio
-async def test_task_assignee_change_creates_assigned_event(
+def test_task_assignee_change_creates_assigned_event(
     client,
     member_token,
     team_id,
     member_id,
     manager_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -164,7 +157,7 @@ async def test_task_assignee_change_creates_assigned_event(
 
     task = create_response.json()
 
-    update_response = await client.patch(
+    update_response = client.patch(
         f"/tasks/{task['id']}",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -176,7 +169,7 @@ async def test_task_assignee_change_creates_assigned_event(
 
     assert update_response.status_code == 200
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -202,14 +195,13 @@ async def test_task_assignee_change_creates_assigned_event(
     assert events[3]["payload"]["new_assignee_id"] == str(manager_id)
 
 
-@pytest.mark.asyncio
-async def test_status_change_creates_status_changed_event(
+def test_status_change_creates_status_changed_event(
     client,
     member_token,
     team_id,
     member_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -224,7 +216,7 @@ async def test_status_change_creates_status_changed_event(
 
     task = create_response.json()
 
-    update_response = await client.patch(
+    update_response = client.patch(
         f"/tasks/{task['id']}/status",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -238,7 +230,7 @@ async def test_status_change_creates_status_changed_event(
 
     assert update_response.json()["status"] == "IN_PROGRESS"
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -259,14 +251,13 @@ async def test_status_change_creates_status_changed_event(
     assert events[2]["payload"]["new_status"] == "IN_PROGRESS"
 
 
-@pytest.mark.asyncio
-async def test_completing_task_creates_completed_event(
+def test_completing_task_creates_completed_event(
     client,
     member_token,
     team_id,
     member_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -281,7 +272,7 @@ async def test_completing_task_creates_completed_event(
 
     task = create_response.json()
 
-    update_response = await client.patch(
+    update_response = client.patch(
         f"/tasks/{task['id']}/status",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -298,7 +289,7 @@ async def test_completing_task_creates_completed_event(
     assert updated_task["status"] == "COMPLETED"
     assert updated_task["completed_at"] is not None
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -319,14 +310,13 @@ async def test_completing_task_creates_completed_event(
     assert events[2]["payload"]["new_status"] == "COMPLETED"
 
 
-@pytest.mark.asyncio
-async def test_task_events_are_returned_in_creation_order(
+def test_task_events_are_returned_in_creation_order(
     client,
     member_token,
     team_id,
     member_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -341,7 +331,7 @@ async def test_task_events_are_returned_in_creation_order(
 
     task = create_response.json()
 
-    await client.patch(
+    client.patch(
         f"/tasks/{task['id']}/status",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -351,7 +341,7 @@ async def test_task_events_are_returned_in_creation_order(
         },
     )
 
-    await client.patch(
+    client.patch(
         f"/tasks/{task['id']}/status",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -361,7 +351,7 @@ async def test_task_events_are_returned_in_creation_order(
         },
     )
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -384,14 +374,13 @@ async def test_task_events_are_returned_in_creation_order(
     assert timestamps == sorted(timestamps)
 
 
-@pytest.mark.asyncio
-async def test_task_events_require_task_access(
+def test_task_events_require_task_access(
     client,
     member_token,
     outsider_token,
     team_id,
 ):
-    create_response = await client.post(
+    create_response = client.post(
         f"/teams/{team_id}/tasks",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -405,7 +394,7 @@ async def test_task_events_require_task_access(
 
     task = create_response.json()
 
-    response = await client.get(
+    response = client.get(
         f"/tasks/{task['id']}/events",
         headers={
             "Authorization": f"Bearer {outsider_token}",

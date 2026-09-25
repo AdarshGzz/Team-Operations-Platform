@@ -72,8 +72,8 @@ The suite contains **58 tests** across seven files.
 | Fixture | Purpose |
 | --- | --- |
 | `database_connection` | Session-scoped connection that owns the outer transaction. |
-| `db_session` | Per-test `AsyncSession` joined to that connection with `create_savepoint`. |
-| `client` | `httpx.AsyncClient` over `ASGITransport`, with `get_db_session` overridden to the test session. |
+| `db_session` | Per-test `Session` joined to that connection with `create_savepoint`. |
+| `client` | FastAPI `TestClient`, with `get_db_session` overridden to the test session. |
 | `register_user`, `login_user`, `auth_headers` | Helpers for the auth endpoints. |
 | `create_user` | Inserts a user directly through the session. |
 | `team_context` | Builds a team containing an admin, a manager, a member, and an outsider. |

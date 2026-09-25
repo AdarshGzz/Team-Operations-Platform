@@ -2,7 +2,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.task import Task
 from app.models.team import Team
@@ -11,16 +11,16 @@ from app.models.user import User, UserRole
 
 
 class TeamService:
-    async def list_teams_for_user(
+    def list_teams_for_user(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         user: User,
     ) -> list[Team]:
         if user.role == UserRole.ADMIN:
-            return await self.list_teams(db)
+            return self.list_teams(db)
 
-        result = await db.execute(
+        result = db.execute(
             select(Team)
             .join(
                 TeamMember,
@@ -34,14 +34,14 @@ class TeamService:
 
         return list(result.scalars().unique().all())
 
-    async def create_team(
+    def create_team(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         name: str,
         description: str | None,
     ) -> Team:
-        result = await db.execute(select(Team).where(Team.name == name))
+        result = db.execute(select(Team).where(Team.name == name))
 
         if result.scalar_one_or_none() is not None:
             raise ValueError("A team with this name already exists")
@@ -52,39 +52,39 @@ class TeamService:
         )
 
         db.add(team)
-        await db.commit()
-        await db.refresh(team)
+        db.commit()
+        db.refresh(team)
 
         return team
 
-    async def get_team(
+    def get_team(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
     ) -> Team | None:
-        result = await db.execute(select(Team).where(Team.id == team_id))
+        result = db.execute(select(Team).where(Team.id == team_id))
 
         return result.scalar_one_or_none()
 
-    async def list_teams(
+    def list_teams(
         self,
-        db: AsyncSession,
+        db: Session,
     ) -> list[Team]:
-        result = await db.execute(select(Team).order_by(Team.name))
+        result = db.execute(select(Team).order_by(Team.name))
 
         return list(result.scalars().all())
 
-    async def update_team(
+    def update_team(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team: Team,
         name: str | None,
         description: str | None,
     ) -> Team:
         if name is not None and name != team.name:
-            result = await db.execute(
+            result = db.execute(
                 select(Team).where(
                     Team.name == name,
                     Team.id != team.id,
@@ -99,18 +99,18 @@ class TeamService:
         if description is not None:
             team.description = description
 
-        await db.commit()
-        await db.refresh(team)
+        db.commit()
+        db.refresh(team)
 
         return team
 
-    async def delete_team(
+    def delete_team(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team: Team,
     ) -> None:
-        result = await db.execute(
+        result = db.execute(
             select(Task.id)
             .where(
                 Task.team_id == team.id,
@@ -121,17 +121,17 @@ class TeamService:
         if result.scalar_one_or_none() is not None:
             raise ValueError("A team cannot be deleted while it contains tasks")
 
-        await db.delete(team)
-        await db.commit()
+        db.delete(team)
+        db.commit()
 
-    async def add_member(
+    def add_member(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
         user_id: UUID,
     ) -> TeamMember:
-        user_result = await db.execute(
+        user_result = db.execute(
             select(User).where(
                 User.id == user_id,
                 User.is_active.is_(True),
@@ -143,7 +143,7 @@ class TeamService:
         if user is None:
             raise ValueError("User not found")
 
-        existing_result = await db.execute(
+        existing_result = db.execute(
             select(TeamMember).where(
                 TeamMember.team_id == team_id,
                 TeamMember.user_id == user_id,
@@ -161,23 +161,23 @@ class TeamService:
         db.add(membership)
 
         try:
-            await db.commit()
+            db.commit()
         except IntegrityError:
-            await db.rollback()
+            db.rollback()
             raise ValueError("Unable to add user to team") from None
 
-        await db.refresh(membership)
+        db.refresh(membership)
 
         return membership
 
-    async def remove_member(
+    def remove_member(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
         user_id: UUID,
     ) -> bool:
-        result = await db.execute(
+        result = db.execute(
             select(TeamMember).where(
                 TeamMember.team_id == team_id,
                 TeamMember.user_id == user_id,
@@ -189,18 +189,18 @@ class TeamService:
         if membership is None:
             return False
 
-        await db.delete(membership)
-        await db.commit()
+        db.delete(membership)
+        db.commit()
 
         return True
 
-    async def list_members(
+    def list_members(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
     ) -> list[TeamMember]:
-        result = await db.execute(
+        result = db.execute(
             select(TeamMember)
             .where(TeamMember.team_id == team_id)
             .order_by(TeamMember.joined_at)

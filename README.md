@@ -4,7 +4,19 @@
 
 A REST API for managing **users**, **teams**, and **tasks**, with role-based access control and an append-only audit trail of every change made to a task.
 
-FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL · Alembic. An in-process scheduler flags overdue tasks automatically.
+FastAPI · SQLAlchemy · PostgreSQL · Alembic. An in-process scheduler flags overdue tasks automatically.
+
+---
+
+## 🚀 Live Deployment
+
+The backend API is deployed on an Oracle Cloud Always Free VPS.
+
+- **API base URL** — http://130.210.28.113
+- **Swagger / API documentation** — http://130.210.28.113/docs
+- **Health check** — http://130.210.28.113/health
+
+The frontend is not deployed as part of this submission. The deployment currently exposes the backend API only.
 
 ---
 
@@ -22,10 +34,10 @@ FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL · Alembic. An in-process schedu
 | Database modelling | PostgreSQL, five tables, UUID keys, explicit relationships |
 | Data integrity | `RESTRICT`/`CASCADE`/`SET NULL` foreign keys, composite primary key, unique constraints, indexes |
 | Validation | Pydantic field constraints plus service-layer business rules |
-| Performance | Indexes on the queried columns; fully async database access |
-| Testing | pytest + pytest-asyncio against the real app and real PostgreSQL |
+| Performance | Indexes on the queried columns; pooled, synchronous database access |
+| Testing | pytest against the real app and real PostgreSQL |
 | Maintainability | Layered: routes → dependencies → services → models |
-| Non-trivial capability | Background overdue-task scheduler on the FastAPI lifespan |
+| Non-trivial capability | Background overdue-task scheduler thread on the FastAPI lifespan |
 | Documentation | This README plus [`docs/engineering-details.md`](docs/engineering-details.md) |
 
 ---
@@ -40,7 +52,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env
-# Set DATABASE_URL (postgresql+asyncpg://...) and JWT_SECRET_KEY in .env
+# Set DATABASE_URL (postgresql://...) and JWT_SECRET_KEY in .env
 
 alembic upgrade head
 uvicorn app.main:app --reload
@@ -61,11 +73,11 @@ pytest                            # tests; requires TEST_DATABASE_URL
 | --- | --- |
 | Language | Python 3.12 – 3.14 (`requires-python = ">=3.12,<3.15"`) |
 | Web framework | FastAPI, served by Uvicorn |
-| Database | PostgreSQL, accessed via SQLAlchemy 2.0 async + `asyncpg` (+ `greenlet`) |
-| Migrations | Alembic, async `env.py` |
+| Database | PostgreSQL, accessed via SQLAlchemy + `psycopg` (psycopg 3, synchronous) |
+| Migrations | Alembic, synchronous `env.py` |
 | Validation / settings | Pydantic v2, `pydantic-settings` |
 | Auth | `pwdlib` (Argon2) for hashing, PyJWT (HS256) for tokens |
-| Tooling | Ruff for lint + format; pytest, pytest-asyncio, httpx for tests |
+| Tooling | Ruff for lint + format; pytest and httpx for tests |
 
 ---
 
@@ -74,9 +86,8 @@ pytest                            # tests; requires TEST_DATABASE_URL
 ### Prerequisites
 
 - **Python 3.12, 3.13, or 3.14** (`>=3.12,<3.15`; verified on 3.14).
-- **PostgreSQL reachable over TLS.** The engine is created with `connect_args={"ssl": True}`, so a local PostgreSQL without TLS will not connect without changing that code.
+- **PostgreSQL reachable over TLS.** The engine is created with `connect_args={"sslmode": "require"}`, so a local PostgreSQL without TLS will not connect without changing that code.
 - `pip` (the project builds through setuptools via `pyproject.toml`).
-- Docker + Compose are optional.
 
 ### Install
 
@@ -86,7 +97,7 @@ source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
-Runtime dependencies are in `[project.dependencies]`; `alembic`, `httpx`, `pytest`, `pytest-asyncio`, `python-dotenv`, and `ruff` are in the `dev` extra. `requirements.txt` is a pinned mirror of the same set for requirements-file installs — `pyproject.toml` is the source of truth.
+Runtime dependencies are in `[project.dependencies]`; `alembic`, `httpx`, `pytest`, `python-dotenv`, and `ruff` are in the `dev` extra. `requirements.txt` is a pinned mirror of the same set for requirements-file installs — `pyproject.toml` is the source of truth.
 
 ### Configure
 
@@ -96,13 +107,13 @@ cp .env.example .env
 
 Set at minimum `DATABASE_URL` and `JWT_SECRET_KEY`, then note:
 
-- Use the **`postgresql+asyncpg://`** scheme. Plain `postgresql://` selects the synchronous psycopg2 driver and fails.
-- Do **not** append `?sslmode=...` or `&channel_binding=...` — those are libpq/psycopg2 parameters that `asyncpg` rejects. SSL is applied via `connect_args` instead.
+- Use the **`postgresql://`** scheme, which selects SQLAlchemy's default synchronous `psycopg` (psycopg 3) driver.
+- libpq parameters such as `?sslmode=require` are accepted; the engine also applies SSL through `connect_args={"sslmode": "require"}`.
 - Generate a secret with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
 ```dotenv
-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
-TEST_DATABASE_URL=postgresql+asyncpg://user:password@host:5432/dbname
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+TEST_DATABASE_URL=postgresql://user:password@host:5432/dbname
 JWT_SECRET_KEY=replace-with-a-long-random-secret
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
@@ -122,14 +133,6 @@ Serves on `http://127.0.0.1:8000`. Every route except the health checks and the 
 ```bash
 pytest          # TEST_DATABASE_URL must be set; see Testing
 ```
-
-### Docker (optional)
-
-```bash
-docker compose up --build
-```
-
-The `api` service builds from `Dockerfile`, publishes port `8000`, and reads `.env` via `env_file`. The database stays external — the compose file defines no database service.
 
 ---
 
@@ -163,7 +166,7 @@ flowchart LR
     Services --> Models["ORM models<br/>app/models"]
     Models --> DB[("PostgreSQL")]
     Services --> Events["TaskEvent audit rows"]
-    Scheduler["Overdue scheduler<br/>lifespan task"] --> Services
+    Scheduler["Overdue scheduler<br/>background thread"] --> Services
 ```
 
 | Layer | Responsibility |
@@ -185,7 +188,7 @@ flowchart LR
 5. **Service** — `task_service.update_status(...)` applies the change, appends a `TaskEvent`, commits, and refreshes.
 6. **Response** — `TaskResponse.model_validate(...)` serialises the ORM object.
 
-Sessions are never threaded through layers by hand: `get_db_session` yields one `AsyncSession` per request and closes it afterwards, and the tests override exactly that dependency.
+Sessions are never threaded through layers by hand: `get_db_session` yields one `Session` per request and closes it afterwards, and the tests override exactly that dependency.
 
 ---
 
@@ -281,8 +284,8 @@ The result is an append-only chronological record of task mutations, assignments
 - `process_overdue_tasks(db=None)` selects tasks with a `due_at` in the past whose status is `TODO` or `IN_PROGRESS`; it sets them to `OVERDUE`, writes an `OVERDUE` event carrying the due date, commits once, and returns the count.
 - `COMPLETED`, `CANCELLED`, and already-`OVERDUE` tasks are excluded, so finished work is never flipped and overdue tasks are not re-processed.
 - The session is injectable: with no argument it opens its own short-lived session (how the scheduler calls it); the tests pass their session so the work stays inside the test transaction.
-- `overdue_task_scheduler()` loops forever, sleeping `OVERDUE_CHECK_INTERVAL_SECONDS` (300s). Unexpected exceptions are logged and the loop continues; `CancelledError` is re-raised for clean shutdown.
-- It runs from the FastAPI `lifespan` handler and is cancelled on shutdown, so it lives in the web process.
+- `overdue_task_scheduler()` loops forever, sleeping `OVERDUE_CHECK_INTERVAL_SECONDS` (300s). Unexpected exceptions are logged and the loop continues.
+- It is started on a daemon thread from the FastAPI `lifespan` handler and stopped on shutdown, so it lives in the web process.
 
 `OVERDUE` is derived, not terminal — a later status change can move the task on, and `completed_at` is only ever set by a transition into `COMPLETED`.
 
@@ -376,7 +379,7 @@ The payload column is named `metadata` in the database because `metadata` is res
 
 **Cascades.** Deleting a team removes its memberships (`CASCADE` + `delete-orphan`) but is *rejected* with `409` while tasks reference it. Deleting a task removes its events. Deleting a user would remove memberships, is blocked by tasks they authored (`RESTRICT`), and unassigns tasks assigned to them (`SET NULL`) — though no user-deletion endpoint exists.
 
-**Alembic.** `migrations/env.py` is the async variant: it overrides the URL from `DATABASE_URL` at runtime (`sqlalchemy.url` in `alembic.ini` is only a placeholder), targets `Base.metadata`, and runs through `async_engine_from_config` with `connection.run_sync(...)`. Post-write hooks run Ruff on every generated revision. The chain is linear with head `09a1d1e26b7d`; because PostgreSQL enums are real types, the two enum additions are hand-written `ALTER TYPE ... ADD VALUE IF NOT EXISTS` statements that autogenerate cannot produce. Full revision history: [`docs/engineering-details.md`](docs/engineering-details.md).
+**Alembic.** `migrations/env.py` overrides the URL from `DATABASE_URL` at runtime (`sqlalchemy.url` in `alembic.ini` is only a placeholder), targets `Base.metadata`, and runs through `engine_from_config` against a live connection. Post-write hooks run Ruff on every generated revision. The chain is linear with head `09a1d1e26b7d`; because PostgreSQL enums are real types, the two enum additions are hand-written `ALTER TYPE ... ADD VALUE IF NOT EXISTS` statements that autogenerate cannot produce. Full revision history: [`docs/engineering-details.md`](docs/engineering-details.md).
 
 ```bash
 alembic upgrade head      # apply to latest
@@ -393,11 +396,11 @@ Healthy state: `alembic current` equals the head and `alembic check` reports "No
 
 ## Testing
 
-pytest with **pytest-asyncio** in strict mode (`@pytest.mark.asyncio` on tests, `@pytest_asyncio.fixture` on fixtures). Fixture and test loop scopes are both pinned to `session`, since asyncpg connections cannot cross event loops.
+pytest with ordinary synchronous fixtures. A session-scoped fixture owns the database connection and the outer transaction.
 
-No server is started: tests drive the real ASGI app in-process with `httpx.AsyncClient` over `ASGITransport`, so routing, dependencies, validation, and serialisation are genuinely exercised. `conftest.py` loads `.env` and requires `TEST_DATABASE_URL`, failing fast with an explicit error when it is unset.
+No server is started: tests drive the real ASGI app in-process with FastAPI's `TestClient`, so routing, dependencies, validation, and serialisation are genuinely exercised. `conftest.py` loads `.env` and requires `TEST_DATABASE_URL`, failing fast with an explicit error when it is unset.
 
-Isolation works by transaction rollback: a session-scoped fixture opens one connection and an outer transaction, each test gets an `AsyncSession` joined to it with `create_savepoint`, and `get_db_session` is overridden so the application uses that session. The outer transaction is rolled back after every test, so nothing is committed and tests do not leak.
+Isolation works by transaction rollback: a session-scoped fixture opens one connection and an outer transaction, each test gets a `Session` joined to it with `create_savepoint`, and `get_db_session` is overridden so the application uses that session. The outer transaction is rolled back after every test, so nothing is committed and tests do not leak.
 
 ```bash
 pytest          # 58 tests across seven modules
@@ -431,16 +434,16 @@ Coverage: health endpoints; registration/login success and failure paths (`409`,
 | Decision | Why | Trade-off |
 | --- | --- | --- |
 | **FastAPI** | Dependency injection, validation, and OpenAPI from the same type hints; thin routing and free Swagger UI | Framework indirection in dependency resolution; `Depends()`-in-defaults trips Ruff `B008`, handled with a scoped per-file ignore |
-| **SQLAlchemy 2.0 async + asyncpg** | The workload is I/O-bound on the database, so async lets one worker serve far more concurrent requests; asyncpg is the fastest asyncio driver | Harder to debug; `greenlet` needed explicitly; different exception types; asyncpg rejects libpq URL params like `sslmode`, hence `connect_args` for SSL |
+| **SQLAlchemy (synchronous) + psycopg 3** | `postgresql://` maps to SQLAlchemy's default synchronous driver; simple, modern, and straightforward to debug | Blocking database I/O, so concurrency comes from the worker/thread pool rather than a single event loop; SSL is configured through `connect_args` |
 | **PostgreSQL** | Native `UUID`, `TIMESTAMPTZ`, `JSON`, and enum types, plus real foreign keys, enforce integrity in the database | Enum values become schema objects, so adding one needs an `ALTER TYPE` migration |
 | **Pydantic schemas separate from ORM** | The contract can forbid client-set fields (`completed_at`, `created_by`) and can never leak `password_hash` | Duplication; two near-identical `UserResponse` classes exist |
 | **JWT bearer auth** | Stateless, horizontally scalable, easy to test | No revocation without extra infrastructure; a leaked token is valid until it expires |
 | **Authorization as dependencies** | Coarse/team/task checks are reusable, so a route cannot silently omit them and rules are testable over HTTP | Task-scoped dependencies re-query the task, loading the row twice per request |
 | **Service layer** | Keeps HTTP concerns out of business rules; `TaskService` is the single place deciding audit events; services are directly testable | Extra indirection for thin query wrappers |
-| **Alembic** | Versioned, reproducible schema; `alembic check` is a cheap drift guard; async `env.py` matches the runtime stack | Enum changes must be hand-written; post-write hooks needed to keep revisions lint-clean |
+| **Alembic** | Versioned, reproducible schema; `alembic check` is a cheap drift guard; synchronous `env.py` matches the runtime stack | Enum changes must be hand-written; post-write hooks needed to keep revisions lint-clean |
 | **Constraints and indexes** | Composite PK blocks duplicate memberships; `RESTRICT` protects tasks; `SET NULL` preserves them; composite indexes back the list and overdue queries | Rigidity: a team with tasks is protected rather than silently emptied, and deletion must be handled explicitly |
 | **Append-only task events** | History is a first-class resource, and "completed"/"overdue" have a natural place to be recorded | Roughly doubles writes per mutation; ordering within a transaction is not defined by `created_at` alone; unbounded growth |
-| **Overdue sweep as a lifespan task** | No broker, no extra deployment unit, no scheduler dependency; shuts down cleanly with the app | Bound to the web process — stops when the app stops, runs once per worker, no locking |
+| **Overdue sweep as a background thread** | No broker, no extra deployment unit, no scheduler dependency; started from the lifespan and shuts down cleanly with the app | Bound to the web process — stops when the app stops, runs once per worker, no locking |
 | **Tests against the real app and database** | Exercises routing, authorization, SQL, and serialisation rather than mocks; rollback gives isolation without truncation | Requires a live database and is slower; no in-memory substitute due to PostgreSQL-specific types |
 | **Ruff** | One tool for lint and format, explicit rule set (`E`, `F`, `I`, `B`, `UP`), modern syntax enforced | Opinionated; some rules (like `B008`) need per-file configuration |
 
@@ -465,13 +468,13 @@ Coverage: health endpoints; registration/login success and failure paths (`409`,
 - **Event ordering within a transaction is not guaranteed** by `created_at` alone, because PostgreSQL's `now()` is the transaction timestamp.
 - **Emails are case-sensitive** — `User@example.com` and `user@example.com` are separate accounts.
 - **`409` for a missing user when adding a team member** — `add_member` raises `ValueError` and the route maps all of them to `409`, where `404` would be more precise.
-- **SSL is unconditional** — `connect_args={"ssl": True}` is hardcoded, so a non-TLS PostgreSQL needs a code change.
+- **SSL is unconditional** — `connect_args={"sslmode": "require"}` is hardcoded, so a non-TLS PostgreSQL needs a code change.
 - **Overdue detection is bounded by its interval** — up to five minutes late, and only while the app runs.
 - **Two migrations add the same enum values** (`e36b114e6120`, `09a1d1e26b7d`); both use `IF NOT EXISTS`, so they are safe but the second is redundant.
 - **Duplicated `UserResponse`** in `app/schemas/auth.py` (`EmailStr`) and `app/schemas/user.py` (`str`).
 - **Unused settings** — `app_name`, `app_version`, `app_env` are accepted but read nowhere.
 
-**Test suite** — requires a live PostgreSQL database (`TEST_DATABASE_URL`); there is no containerized or in-memory database. Coverage focuses on authentication, authorization, the task lifecycle, and overdue processing; there are no pagination, concurrency, or load tests, and no test for the assignment-time-only assignee rule.
+**Test suite** — requires a live PostgreSQL database (`TEST_DATABASE_URL`); there is no in-memory substitute. Coverage focuses on authentication, authorization, the task lifecycle, and overdue processing; there are no pagination, concurrency, or load tests, and no test for the assignment-time-only assignee rule.
 
 ---
 
@@ -488,7 +491,7 @@ None of this is implemented.
 - Let nullable fields be cleared on `PATCH` by distinguishing omitted from explicit `null` (e.g. `model_fields_set`).
 - Richer task workflow: tags, comments, attachments, sub-tasks, history filtering by event type.
 - Observability: structured logging with request IDs, metrics, tracing, and separate liveness/readiness probes.
-- Rate limiting and login throttling; CI running Ruff and pytest against a PostgreSQL service container.
+- Rate limiting and login throttling; CI running Ruff and pytest against a throwaway PostgreSQL database.
 - API versioning (e.g. `/api/v1`); email verification and password reset; consolidating the duplicated `UserResponse` and the redundant enum migration.
 
 ---
@@ -509,16 +512,13 @@ Assignment/
 ├── docs/
 │   ├── engineering-details.md    # Alembic revision history, per-file test breakdown
 │   └── images/banner.jpg         # banner shown at the top of this README
-├── migrations/               # async env.py, script.py.mako, six revisions
+├── migrations/               # env.py, script.py.mako, six revisions
 ├── scripts/create_admin.py   # interactive admin bootstrap
 ├── tests/                    # conftest.py + seven test modules
 ├── alembic.ini               # Alembic config + Ruff post-write hooks
 ├── pyproject.toml            # metadata, dependencies, dev extra, Ruff and pytest config
 ├── requirements.txt          # pinned mirror of the dependency set
-├── .env.example              # template for required environment variables
-├── Dockerfile                # python:3.12-slim image; installs the project, runs Uvicorn
-├── docker-compose.yml        # single api service reading .env
-└── .dockerignore             # keeps .venv, .git, and caches out of the build context
+└── .env.example              # template for required environment variables
 ```
 
 `app/models/__init__.py` aggregates every model so Alembic sees the full metadata. `scripts/__init__.py` makes the bootstrap runnable via `python -m`. Remaining package `__init__.py` files are empty markers. Generated paths (`__pycache__/`, `.venv/`, `build/`, caches) are omitted and covered by `.gitignore`.
@@ -527,6 +527,6 @@ Assignment/
 
 ## AI Usage Disclosure
 
-AI coding tools were used during the development of this project, for implementation and refactoring (models, schemas, services, routes), debugging runtime errors from Alembic, SQLAlchemy async, and asyncpg, resolving Ruff lint and import-cycle issues, developing and adjusting the test suite and its shared fixtures, and drafting this README.
+AI coding tools were used during the development of this project, for implementation and refactoring (models, schemas, services, routes), debugging runtime errors from Alembic and SQLAlchemy, resolving Ruff lint and import-cycle issues, developing and adjusting the test suite and its shared fixtures, and drafting this README.
 
 All AI-assisted changes were reviewed and validated against the running application: migrations were applied, the test suite was executed (58 passing tests), and the linters were run (`ruff check`, `ruff format --check`). The architecture, domain rules, and scope decisions follow the assignment requirements, and the code in this repository remains the authoritative description of the system's behaviour.

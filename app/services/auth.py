@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.core.security import (
     create_access_token,
@@ -10,15 +10,15 @@ from app.models.user import User, UserRole
 
 
 class AuthService:
-    async def register(
+    def register(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         email: str,
         password: str,
         name: str,
     ) -> User:
-        result = await db.execute(select(User).where(User.email == email))
+        result = db.execute(select(User).where(User.email == email))
 
         existing_user = result.scalar_one_or_none()
 
@@ -34,19 +34,19 @@ class AuthService:
         )
 
         db.add(user)
-        await db.commit()
-        await db.refresh(user)
+        db.commit()
+        db.refresh(user)
 
         return user
 
-    async def authenticate(
+    def authenticate(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         email: str,
         password: str,
     ) -> str | None:
-        result = await db.execute(select(User).where(User.email == email))
+        result = db.execute(select(User).where(User.email == email))
 
         user = result.scalar_one_or_none()
 

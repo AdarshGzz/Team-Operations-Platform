@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.core.database import get_db_session
 from app.schemas.auth import (
@@ -21,12 +21,12 @@ router = APIRouter(
     response_model=UserResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def register(
+def register(
     request: RegisterRequest,
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> UserResponse:
     try:
-        user = await auth_service.register(
+        user = auth_service.register(
             db,
             email=request.email,
             password=request.password,
@@ -45,11 +45,11 @@ async def register(
     "/login",
     response_model=TokenResponse,
 )
-async def login(
+def login(
     request: LoginRequest,
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> TokenResponse:
-    access_token = await auth_service.authenticate(
+    access_token = auth_service.authenticate(
         db,
         email=request.email,
         password=request.password,

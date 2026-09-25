@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.authorization import require_roles
@@ -20,13 +20,13 @@ router = APIRouter(
     "",
     response_model=list[UserResponse],
 )
-async def list_users(
+def list_users(
     current_user: User = Depends(
         require_roles(UserRole.ADMIN),
     ),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> list[UserResponse]:
-    users = await user_service.list_users(db)
+    users = user_service.list_users(db)
 
     return [UserResponse.model_validate(user) for user in users]
 
@@ -35,7 +35,7 @@ async def list_users(
     "/me",
     response_model=UserResponse,
 )
-async def get_me(
+def get_me(
     current_user: User = Depends(get_current_user),
 ) -> UserResponse:
     return UserResponse.model_validate(current_user)
@@ -45,14 +45,14 @@ async def get_me(
     "/{user_id}",
     response_model=UserResponse,
 )
-async def get_user(
+def get_user(
     user_id: UUID,
     current_user: User = Depends(
         require_roles(UserRole.ADMIN),
     ),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> UserResponse:
-    user = await user_service.get_user(
+    user = user_service.get_user(
         db,
         user_id=user_id,
     )
@@ -70,15 +70,15 @@ async def get_user(
     "/{user_id}",
     response_model=UserResponse,
 )
-async def update_user(
+def update_user(
     user_id: UUID,
     request: UserUpdateRequest,
     current_user: User = Depends(
         require_roles(UserRole.ADMIN),
     ),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> UserResponse:
-    user = await user_service.get_user(
+    user = user_service.get_user(
         db,
         user_id=user_id,
     )
@@ -95,7 +95,7 @@ async def update_user(
             detail="You cannot deactivate your own account",
         )
 
-    user = await user_service.update_user(
+    user = user_service.update_user(
         db,
         user=user,
         role=request.role,

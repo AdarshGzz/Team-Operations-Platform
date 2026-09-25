@@ -1,13 +1,9 @@
-import pytest
-
-
-@pytest.mark.asyncio
-async def test_task_can_be_marked_in_progress(
+def test_task_can_be_marked_in_progress(
     client,
     manager_token,
     task,
 ):
-    response = await client.patch(
+    response = client.patch(
         f"/tasks/{task.id}/status",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -25,13 +21,12 @@ async def test_task_can_be_marked_in_progress(
     assert data["completed_at"] is None
 
 
-@pytest.mark.asyncio
-async def test_status_change_creates_audit_event(
+def test_status_change_creates_audit_event(
     client,
     manager_token,
     task,
 ):
-    response = await client.patch(
+    response = client.patch(
         f"/tasks/{task.id}/status",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -43,7 +38,7 @@ async def test_status_change_creates_audit_event(
 
     assert response.status_code == 200
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task.id}/events",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -64,13 +59,12 @@ async def test_status_change_creates_audit_event(
     assert status_events[0]["payload"]["new_status"] == "IN_PROGRESS"
 
 
-@pytest.mark.asyncio
-async def test_completing_task_sets_completed_at(
+def test_completing_task_sets_completed_at(
     client,
     manager_token,
     task,
 ):
-    response = await client.patch(
+    response = client.patch(
         f"/tasks/{task.id}/status",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -88,13 +82,12 @@ async def test_completing_task_sets_completed_at(
     assert data["completed_at"] is not None
 
 
-@pytest.mark.asyncio
-async def test_completing_task_creates_completed_event(
+def test_completing_task_creates_completed_event(
     client,
     manager_token,
     task,
 ):
-    response = await client.patch(
+    response = client.patch(
         f"/tasks/{task.id}/status",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -106,7 +99,7 @@ async def test_completing_task_creates_completed_event(
 
     assert response.status_code == 200
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task.id}/events",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -122,13 +115,12 @@ async def test_completing_task_creates_completed_event(
     assert len(completed_events) == 1
 
 
-@pytest.mark.asyncio
-async def test_task_update_creates_update_event(
+def test_task_update_creates_update_event(
     client,
     manager_token,
     task,
 ):
-    response = await client.patch(
+    response = client.patch(
         f"/tasks/{task.id}",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -141,7 +133,7 @@ async def test_task_update_creates_update_event(
 
     assert response.status_code == 200
 
-    events_response = await client.get(
+    events_response = client.get(
         f"/tasks/{task.id}/events",
         headers={
             "Authorization": f"Bearer {manager_token}",

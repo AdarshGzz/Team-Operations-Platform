@@ -1,19 +1,15 @@
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
 
-import pytest_asyncio
+import pytest
 from dotenv import load_dotenv
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import (
-    AsyncConnection,
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
+from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_db_session
 from app.core.security import hash_password
@@ -31,33 +27,33 @@ if not TEST_DATABASE_URL:
     )
 
 
-test_engine = create_async_engine(
+test_engine = create_engine(
     TEST_DATABASE_URL,
     pool_pre_ping=True,
 )
 
-TestSessionLocal = async_sessionmaker(
+TestSessionLocal = sessionmaker(
     bind=test_engine,
-    class_=AsyncSession,
+    class_=Session,
     expire_on_commit=False,
 )
 
 
-@pytest_asyncio.fixture(scope="session")
-async def database_connection() -> AsyncGenerator[AsyncConnection, None]:
-    async with test_engine.connect() as connection:
+@pytest.fixture(scope="session")
+def database_connection() -> Generator[Connection, None, None]:
+    with test_engine.connect() as connection:
         yield connection
 
-    await test_engine.dispose()
+    test_engine.dispose()
 
 
-@pytest_asyncio.fixture
-async def db_session(
-    database_connection: AsyncConnection,
-) -> AsyncGenerator[AsyncSession, None]:
-    transaction = await database_connection.begin()
+@pytest.fixture
+def db_session(
+    database_connection: Connection,
+) -> Generator[Session, None, None]:
+    transaction = database_connection.begin()
 
-    session = AsyncSession(
+    session = Session(
         bind=database_connection,
         expire_on_commit=False,
         join_transaction_mode="create_savepoint",
@@ -66,39 +62,37 @@ async def db_session(
     try:
         yield session
     finally:
-        await session.close()
-        await transaction.rollback()
+        session.close()
+        transaction.rollback()
 
 
-@pytest_asyncio.fixture
-async def client(
-    db_session: AsyncSession,
-) -> AsyncGenerator[AsyncClient, None]:
-    async def override_get_db_session():
+@pytest.fixture
+def client(
+    db_session: Session,
+) -> Generator[TestClient, None, None]:
+    def override_get_db_session() -> Generator[Session, None, None]:
         yield db_session
 
     app.dependency_overrides[get_db_session] = override_get_db_session
 
-    transport = ASGITransport(app=app)
+    test_client = TestClient(app)
 
-    async with AsyncClient(
-        transport=transport,
-        base_url="http://test",
-    ) as async_client:
-        yield async_client
-
-    app.dependency_overrides.clear()
+    try:
+        yield test_client
+    finally:
+        app.dependency_overrides.clear()
+        test_client.close()
 
 
-@pytest_asyncio.fixture
-async def register_user(client: AsyncClient):
-    async def _register_user(
+@pytest.fixture
+def register_user(client: TestClient):
+    def _register_user(
         *,
         email: str,
         password: str = "password123",
         name: str = "Test User",
     ) -> dict[str, Any]:
-        response = await client.post(
+        response = client.post(
             "/auth/register",
             json={
                 "email": email,
@@ -114,14 +108,14 @@ async def register_user(client: AsyncClient):
     return _register_user
 
 
-@pytest_asyncio.fixture
-async def login_user(client: AsyncClient):
-    async def _login_user(
+@pytest.fixture
+def login_user(client: TestClient):
+    def _login_user(
         *,
         email: str,
         password: str = "password123",
     ) -> str:
-        response = await client.post(
+        response = client.post(
             "/auth/login",
             json={
                 "email": email,
@@ -136,8 +130,8 @@ async def login_user(client: AsyncClient):
     return _login_user
 
 
-@pytest_asyncio.fixture
-async def auth_headers():
+@pytest.fixture
+def auth_headers():
     def _auth_headers(token: str) -> dict[str, str]:
         return {
             "Authorization": f"Bearer {token}",
@@ -146,16 +140,14 @@ async def auth_headers():
     return _auth_headers
 
 
-@pytest_asyncio.fixture
-async def create_user(db_session: AsyncSession):
-
-    async def _create_user(
+@pytest.fixture
+def create_user(db_session: Session):
+    def _create_user(
         *,
         email: str,
         role: UserRole = UserRole.MEMBER,
         name: str = "Test User",
     ) -> User:
-
         user = User(
             email=email,
             password_hash=hash_password("password123"),
@@ -166,18 +158,18 @@ async def create_user(db_session: AsyncSession):
 
         db_session.add(user)
 
-        await db_session.flush()
+        db_session.flush()
 
-        await db_session.refresh(user)
+        db_session.refresh(user)
 
         return user
 
     return _create_user
 
 
-@pytest_asyncio.fixture
-async def team_context(
-    client: AsyncClient,
+@pytest.fixture
+def team_context(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
@@ -187,33 +179,33 @@ async def team_context(
     already added to it.
     """
 
-    admin = await create_user(
+    admin = create_user(
         email="lifecycle-admin@example.com",
         role=UserRole.ADMIN,
         name="Lifecycle Admin",
     )
 
-    manager = await create_user(
+    manager = create_user(
         email="lifecycle-manager@example.com",
         role=UserRole.MANAGER,
         name="Lifecycle Manager",
     )
 
-    member = await create_user(
+    member = create_user(
         email="lifecycle-member@example.com",
         role=UserRole.MEMBER,
         name="Lifecycle Member",
     )
 
-    outsider = await create_user(
+    outsider = create_user(
         email="lifecycle-outsider@example.com",
         role=UserRole.MEMBER,
         name="Lifecycle Outsider",
     )
 
-    admin_token = await login_user(email=admin.email)
+    admin_token = login_user(email=admin.email)
 
-    response = await client.post(
+    response = client.post(
         "/teams",
         json={
             "name": "Lifecycle Team",
@@ -226,7 +218,7 @@ async def team_context(
     team_id = response.json()["id"]
 
     for user in (manager, member):
-        membership_response = await client.post(
+        membership_response = client.post(
             f"/teams/{team_id}/members/{user.id}",
             headers=auth_headers(admin_token),
         )
@@ -240,57 +232,57 @@ async def team_context(
         outsider=outsider,
         team_id=team_id,
         admin_token=admin_token,
-        manager_token=await login_user(email=manager.email),
-        member_token=await login_user(email=member.email),
-        outsider_token=await login_user(email=outsider.email),
+        manager_token=login_user(email=manager.email),
+        member_token=login_user(email=member.email),
+        outsider_token=login_user(email=outsider.email),
         auth_headers=auth_headers,
     )
 
 
-@pytest_asyncio.fixture
-async def manager_token(team_context: SimpleNamespace) -> str:
+@pytest.fixture
+def manager_token(team_context: SimpleNamespace) -> str:
     return team_context.manager_token
 
 
-@pytest_asyncio.fixture
-async def admin_token(team_context: SimpleNamespace) -> str:
+@pytest.fixture
+def admin_token(team_context: SimpleNamespace) -> str:
     return team_context.admin_token
 
 
-@pytest_asyncio.fixture
-async def member_token(team_context: SimpleNamespace) -> str:
+@pytest.fixture
+def member_token(team_context: SimpleNamespace) -> str:
     return team_context.member_token
 
 
-@pytest_asyncio.fixture
-async def admin_id(team_context: SimpleNamespace):
+@pytest.fixture
+def admin_id(team_context: SimpleNamespace):
     return team_context.admin.id
 
 
-@pytest_asyncio.fixture
-async def member_id(team_context: SimpleNamespace):
+@pytest.fixture
+def member_id(team_context: SimpleNamespace):
     return team_context.member.id
 
 
-@pytest_asyncio.fixture
-async def manager_id(team_context: SimpleNamespace):
+@pytest.fixture
+def manager_id(team_context: SimpleNamespace):
     return team_context.manager.id
 
 
-@pytest_asyncio.fixture
-async def team_id(team_context: SimpleNamespace) -> str:
+@pytest.fixture
+def team_id(team_context: SimpleNamespace) -> str:
     return team_context.team_id
 
 
-@pytest_asyncio.fixture
-async def outsider_token(team_context: SimpleNamespace) -> str:
+@pytest.fixture
+def outsider_token(team_context: SimpleNamespace) -> str:
     return team_context.outsider_token
 
 
-@pytest_asyncio.fixture
-async def task(
-    client: AsyncClient,
-    db_session: AsyncSession,
+@pytest.fixture
+def task(
+    client: TestClient,
+    db_session: Session,
     team_context: SimpleNamespace,
 ) -> Task:
     """
@@ -298,7 +290,7 @@ async def task(
     so tests can inspect and mutate it directly.
     """
 
-    response = await client.post(
+    response = client.post(
         f"/teams/{team_context.team_id}/tasks",
         json={
             "title": "Lifecycle Task",
@@ -310,7 +302,7 @@ async def task(
 
     task_id = UUID(response.json()["id"])
 
-    result = await db_session.execute(
+    result = db_session.execute(
         select(Task).where(
             Task.id == task_id,
         )

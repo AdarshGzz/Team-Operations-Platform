@@ -1,33 +1,33 @@
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.user import User, UserRole
 
 
 class UserService:
-    async def list_users(
+    def list_users(
         self,
-        db: AsyncSession,
+        db: Session,
     ) -> list[User]:
-        result = await db.execute(select(User).order_by(User.created_at.desc()))
+        result = db.execute(select(User).order_by(User.created_at.desc()))
 
         return list(result.scalars().all())
 
-    async def get_user(
+    def get_user(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         user_id: UUID,
     ) -> User | None:
-        result = await db.execute(select(User).where(User.id == user_id))
+        result = db.execute(select(User).where(User.id == user_id))
 
         return result.scalar_one_or_none()
 
-    async def update_user(
+    def update_user(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         user: User,
         role: UserRole | None,
@@ -39,8 +39,8 @@ class UserService:
         if is_active is not None:
             user.is_active = is_active
 
-        await db.commit()
-        await db.refresh(user)
+        db.commit()
+        db.refresh(user)
 
         return user
 

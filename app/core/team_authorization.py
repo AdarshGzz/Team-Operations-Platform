@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db_session
@@ -11,10 +11,10 @@ from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
 
 
-async def require_team_access(
+def require_team_access(
     team_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> Team:
     """
     Allow access to a team when the user is:
@@ -24,7 +24,7 @@ async def require_team_access(
     Returns the requested Team after authorization succeeds.
     """
 
-    result = await db.execute(select(Team).where(Team.id == team_id))
+    result = db.execute(select(Team).where(Team.id == team_id))
 
     team = result.scalar_one_or_none()
 
@@ -37,7 +37,7 @@ async def require_team_access(
     if current_user.role == UserRole.ADMIN:
         return team
 
-    membership_result = await db.execute(
+    membership_result = db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id,
             TeamMember.user_id == current_user.id,
@@ -55,10 +55,10 @@ async def require_team_access(
     return team
 
 
-async def require_team_manager_access(
+def require_team_manager_access(
     team_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> User:
     """
     Allow team management to:
@@ -75,7 +75,7 @@ async def require_team_manager_access(
             detail="Manager or admin access required",
         )
 
-    result = await db.execute(
+    result = db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id,
             TeamMember.user_id == current_user.id,
