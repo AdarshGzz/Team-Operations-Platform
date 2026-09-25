@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.task import Task
 from app.models.team import Team
 from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
@@ -109,6 +110,17 @@ class TeamService:
         *,
         team: Team,
     ) -> None:
+        result = await db.execute(
+            select(Task.id)
+            .where(
+                Task.team_id == team.id,
+            )
+            .limit(1)
+        )
+
+        if result.scalar_one_or_none() is not None:
+            raise ValueError("A team cannot be deleted while it contains tasks")
+
         await db.delete(team)
         await db.commit()
 

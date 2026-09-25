@@ -134,10 +134,16 @@ async def delete_team(
             detail="Team not found",
         )
 
-    await team_service.delete_team(
-        db,
-        team=team,
-    )
+    try:
+        await team_service.delete_team(
+            db,
+            team=team,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.post(

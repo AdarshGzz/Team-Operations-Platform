@@ -684,3 +684,60 @@ async def test_manager_can_remove_member(
     members = members_response.json()
 
     assert all(member_data["user_id"] != str(member.id) for member_data in members)
+
+
+@pytest.mark.asyncio
+async def test_cannot_delete_team_with_tasks(
+    client: AsyncClient,
+    create_user,
+    login_user,
+    auth_headers,
+):
+    admin = await create_user(
+        email="admin-delete-team-tasks@example.com",
+        role=UserRole.ADMIN,
+    )
+
+    token = await login_user(
+        email=admin.email,
+    )
+
+    create_response = await client.post(
+        "/teams",
+        json={
+            "name": "Team With Tasks",
+        },
+        headers=auth_headers(token),
+    )
+
+    assert create_response.status_code == 201
+
+    team_id = create_response.json()["id"]
+
+    task_response = await client.post(
+        f"/teams/{team_id}/tasks",
+        json={
+            "title": "Blocking task",
+        },
+        headers=auth_headers(token),
+    )
+
+    assert task_response.status_code == 201
+
+    response = await client.delete(
+        f"/teams/{team_id}",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "A team cannot be deleted while it contains tasks"
+    )
+
+    # The team must survive the rejected delete.
+    get_response = await client.get(
+        f"/teams/{team_id}",
+        headers=auth_headers(token),
+    )
+
+    assert get_response.status_code == 200
