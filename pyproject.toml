@@ -36,6 +36,7 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "app/api/**" = ["B008"]
+"app/core/authorization.py" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
