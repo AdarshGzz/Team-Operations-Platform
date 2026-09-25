@@ -205,6 +205,12 @@ async def team_context(
         name="Lifecycle Member",
     )
 
+    outsider = await create_user(
+        email="lifecycle-outsider@example.com",
+        role=UserRole.MEMBER,
+        name="Lifecycle Outsider",
+    )
+
     admin_token = await login_user(email=admin.email)
 
     response = await client.post(
@@ -231,10 +237,12 @@ async def team_context(
         admin=admin,
         manager=manager,
         member=member,
+        outsider=outsider,
         team_id=team_id,
         admin_token=admin_token,
         manager_token=await login_user(email=manager.email),
         member_token=await login_user(email=member.email),
+        outsider_token=await login_user(email=outsider.email),
         auth_headers=auth_headers,
     )
 
@@ -242,6 +250,41 @@ async def team_context(
 @pytest_asyncio.fixture
 async def manager_token(team_context: SimpleNamespace) -> str:
     return team_context.manager_token
+
+
+@pytest_asyncio.fixture
+async def admin_token(team_context: SimpleNamespace) -> str:
+    return team_context.admin_token
+
+
+@pytest_asyncio.fixture
+async def member_token(team_context: SimpleNamespace) -> str:
+    return team_context.member_token
+
+
+@pytest_asyncio.fixture
+async def admin_id(team_context: SimpleNamespace):
+    return team_context.admin.id
+
+
+@pytest_asyncio.fixture
+async def member_id(team_context: SimpleNamespace):
+    return team_context.member.id
+
+
+@pytest_asyncio.fixture
+async def manager_id(team_context: SimpleNamespace):
+    return team_context.manager.id
+
+
+@pytest_asyncio.fixture
+async def team_id(team_context: SimpleNamespace) -> str:
+    return team_context.team_id
+
+
+@pytest_asyncio.fixture
+async def outsider_token(team_context: SimpleNamespace) -> str:
+    return team_context.outsider_token
 
 
 @pytest_asyncio.fixture

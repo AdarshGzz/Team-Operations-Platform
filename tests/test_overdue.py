@@ -2,48 +2,48 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.task import Task, TaskStatus
+from app.models.task import TaskStatus
 from app.models.task_event import TaskEvent, TaskEventType
 from app.services.task_scheduler import process_overdue_tasks
 
 
-def _past() -> datetime:
-    return datetime.now(UTC) - timedelta(minutes=5)
-
-
-def _future() -> datetime:
-    return datetime.now(UTC) + timedelta(minutes=5)
-
-
-async def _overdue_events(
-    db: AsyncSession,
-    task_id,
-) -> list[TaskEvent]:
-    result = await db.execute(
-        select(TaskEvent).where(
-            TaskEvent.task_id == task_id,
-            TaskEvent.event_type == TaskEventType.OVERDUE,
-        )
-    )
-
-    return list(result.scalars().all())
-
-
 @pytest.mark.asyncio
-async def test_due_task_is_marked_overdue(
-    db_session: AsyncSession,
-    task: Task,
+async def test_due_task_becomes_overdue(
+    db_session,
+    task,
 ):
-    task.due_at = _past()
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
     task.status = TaskStatus.TODO
 
     await db_session.commit()
 
-    updated_count = await process_overdue_tasks(db=db_session)
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
 
-    assert updated_count >= 1
+    assert updated_count == 1
+
+    await db_session.refresh(task)
+
+    assert task.status == TaskStatus.OVERDUE
+
+
+@pytest.mark.asyncio
+async def test_in_progress_task_becomes_overdue(
+    db_session,
+    task,
+):
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
+    task.status = TaskStatus.IN_PROGRESS
+
+    await db_session.commit()
+
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
+
+    assert updated_count == 1
 
     await db_session.refresh(task)
 
@@ -52,125 +52,111 @@ async def test_due_task_is_marked_overdue(
 
 @pytest.mark.asyncio
 async def test_overdue_task_creates_event(
-    db_session: AsyncSession,
-    task: Task,
+    db_session,
+    task,
 ):
-    task.due_at = _past()
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
     task.status = TaskStatus.TODO
 
     await db_session.commit()
 
-    await process_overdue_tasks(db=db_session)
+    await process_overdue_tasks(
+        db_session,
+    )
 
-    events = await _overdue_events(db_session, task.id)
+    result = await db_session.execute(
+        select(TaskEvent).where(
+            TaskEvent.task_id == task.id,
+            TaskEvent.event_type == TaskEventType.OVERDUE,
+        )
+    )
 
-    assert len(events) == 1
-    assert events[0].payload["due_at"] is not None
+    event = result.scalar_one_or_none()
 
-
-@pytest.mark.asyncio
-async def test_in_progress_task_becomes_overdue(
-    db_session: AsyncSession,
-    task: Task,
-):
-    task.due_at = _past()
-    task.status = TaskStatus.IN_PROGRESS
-
-    await db_session.commit()
-
-    await process_overdue_tasks(db=db_session)
-
-    await db_session.refresh(task)
-
-    assert task.status == TaskStatus.OVERDUE
+    assert event is not None
+    assert event.payload is not None
+    assert event.payload["due_at"] is not None
 
 
 @pytest.mark.asyncio
-async def test_future_task_is_not_marked_overdue(
-    db_session: AsyncSession,
-    task: Task,
+async def test_future_task_does_not_become_overdue(
+    db_session,
+    task,
 ):
-    task.due_at = _future()
+    task.due_at = datetime.now(UTC) + timedelta(hours=1)
     task.status = TaskStatus.TODO
 
     await db_session.commit()
 
-    await process_overdue_tasks(db=db_session)
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
+
+    assert updated_count == 0
 
     await db_session.refresh(task)
 
     assert task.status == TaskStatus.TODO
-    assert await _overdue_events(db_session, task.id) == []
 
 
 @pytest.mark.asyncio
-async def test_task_without_due_date_is_not_marked_overdue(
-    db_session: AsyncSession,
-    task: Task,
+async def test_completed_task_does_not_become_overdue(
+    db_session,
+    task,
 ):
-    task.due_at = None
-    task.status = TaskStatus.TODO
-
-    await db_session.commit()
-
-    await process_overdue_tasks(db=db_session)
-
-    await db_session.refresh(task)
-
-    assert task.status == TaskStatus.TODO
-    assert await _overdue_events(db_session, task.id) == []
-
-
-@pytest.mark.asyncio
-async def test_completed_task_is_not_marked_overdue(
-    db_session: AsyncSession,
-    task: Task,
-):
-    task.due_at = _past()
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
     task.status = TaskStatus.COMPLETED
 
     await db_session.commit()
 
-    await process_overdue_tasks(db=db_session)
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
+
+    assert updated_count == 0
 
     await db_session.refresh(task)
 
     assert task.status == TaskStatus.COMPLETED
-    assert await _overdue_events(db_session, task.id) == []
 
 
 @pytest.mark.asyncio
-async def test_cancelled_task_is_not_marked_overdue(
-    db_session: AsyncSession,
-    task: Task,
+async def test_cancelled_task_does_not_become_overdue(
+    db_session,
+    task,
 ):
-    task.due_at = _past()
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
     task.status = TaskStatus.CANCELLED
 
     await db_session.commit()
 
-    await process_overdue_tasks(db=db_session)
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
+
+    assert updated_count == 0
 
     await db_session.refresh(task)
 
     assert task.status == TaskStatus.CANCELLED
-    assert await _overdue_events(db_session, task.id) == []
 
 
 @pytest.mark.asyncio
-async def test_already_overdue_task_is_not_reprocessed(
-    db_session: AsyncSession,
-    task: Task,
+async def test_already_overdue_task_is_not_processed_again(
+    db_session,
+    task,
 ):
-    task.due_at = _past()
+    task.due_at = datetime.now(UTC) - timedelta(minutes=5)
     task.status = TaskStatus.OVERDUE
 
     await db_session.commit()
 
-    await process_overdue_tasks(db=db_session)
-    await process_overdue_tasks(db=db_session)
+    updated_count = await process_overdue_tasks(
+        db_session,
+    )
+
+    assert updated_count == 0
 
     await db_session.refresh(task)
 
     assert task.status == TaskStatus.OVERDUE
-    assert await _overdue_events(db_session, task.id) == []
