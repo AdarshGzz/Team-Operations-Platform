@@ -5,3 +5,7 @@ asyncpg
 alembic
 pydantic
 pydantic-settings
+pyjwt
+pwdlib
+ruff
+email-validator
