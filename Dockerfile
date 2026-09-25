@@ -5,14 +5,11 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-COPY pyproject.toml .
+COPY pyproject.toml README.md ./
+COPY app ./app
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir \
-        "fastapi>=0.115,<1.0" \
-        "uvicorn[standard]>=0.34,<1.0"
-
-COPY app ./app
+    && pip install --no-cache-dir .
 
 EXPOSE 8000
 

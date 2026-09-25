@@ -103,5 +103,3 @@ async def update_user(
     )
 
     return UserResponse.model_validate(user)
-
-

@@ -3,3 +3,9 @@
 .commandcode
 team_operations_platform.egg-info
 *.egg-info
+build/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
