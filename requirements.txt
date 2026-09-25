@@ -9,3 +9,6 @@ pyjwt
 pwdlib
 ruff
 email-validator
+pytest
+pytest-asyncio
+httpx   

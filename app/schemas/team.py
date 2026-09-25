@@ -25,4 +25,4 @@ class TeamResponse(BaseModel):
 
     id: UUID
     name: str
-    description: str | None
+    description: str | None = None

@@ -35,10 +35,9 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"app/api/**" = ["B008"]
-"app/core/authorization.py" = ["B008"]
-"app/core/task_authorization.py" = ["B008"]
-"app/core/team_authorization.py" = ["B008"]
+"app/**" = ["B008"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
