@@ -1,15 +1,10 @@
 import enum
 import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, Index, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import JSON, Column, DateTime, Enum, ForeignKey, Index, Uuid, func
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base
-
-if TYPE_CHECKING:
-    from app.models.task import Task
 
 
 class TaskEventType(enum.StrEnum):
@@ -24,34 +19,37 @@ class TaskEventType(enum.StrEnum):
 class TaskEvent(Base):
     __tablename__ = "task_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id = Column(
+        Uuid,
         primary_key=True,
         default=uuid.uuid4,
     )
 
-    task_id: Mapped[uuid.UUID] = mapped_column(
+    task_id = Column(
+        Uuid,
         ForeignKey("tasks.id", ondelete="CASCADE"),
         nullable=False,
     )
 
-    event_type: Mapped[TaskEventType] = mapped_column(
+    event_type = Column(
         Enum(TaskEventType, name="task_event_type"),
         nullable=False,
     )
 
-    payload: Mapped[dict | None] = mapped_column(
+    payload = Column(
         "metadata",
         JSON,
         nullable=True,
     )
 
-    created_at: Mapped[datetime] = mapped_column(
+    created_at = Column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    task: Mapped["Task"] = relationship(
+    task = relationship(
+        "Task",
         back_populates="events",
     )
 

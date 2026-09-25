@@ -1,34 +1,30 @@
-from typing import TYPE_CHECKING
-
-from sqlalchemy import String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Column, String, Text
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-
-if TYPE_CHECKING:
-    from app.models.task import Task
-    from app.models.team_member import TeamMember
 
 
 class Team(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "teams"
 
-    name: Mapped[str] = mapped_column(
+    name = Column(
         String(150),
         nullable=False,
         unique=True,
     )
 
-    description: Mapped[str | None] = mapped_column(
+    description = Column(
         Text,
         nullable=True,
     )
 
-    members: Mapped[list["TeamMember"]] = relationship(
+    members = relationship(
+        "TeamMember",
         back_populates="team",
         cascade="all, delete-orphan",
     )
 
-    tasks: Mapped[list["Task"]] = relationship(
+    tasks = relationship(
+        "Task",
         back_populates="team",
     )

@@ -1,40 +1,36 @@
-import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING
-
-from sqlalchemy import DateTime, ForeignKey, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Column, DateTime, ForeignKey, Uuid, func
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base
-
-if TYPE_CHECKING:
-    from app.models.team import Team
-    from app.models.user import User
 
 
 class TeamMember(Base):
     __tablename__ = "team_members"
 
-    team_id: Mapped[uuid.UUID] = mapped_column(
+    team_id = Column(
+        Uuid,
         ForeignKey("teams.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
-    user_id: Mapped[uuid.UUID] = mapped_column(
+    user_id = Column(
+        Uuid,
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
 
-    joined_at: Mapped[datetime] = mapped_column(
+    joined_at = Column(
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
     )
 
-    team: Mapped["Team"] = relationship(
+    team = relationship(
+        "Team",
         back_populates="members",
     )
 
-    user: Mapped["User"] = relationship(
+    user = relationship(
+        "User",
         back_populates="team_memberships",
     )

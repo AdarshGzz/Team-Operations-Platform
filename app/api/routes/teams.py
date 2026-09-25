@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.authorization import require_roles
@@ -31,13 +31,13 @@ router = APIRouter(
     response_model=TeamResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_team(
+def create_team(
     request: TeamCreateRequest,
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> TeamResponse:
     try:
-        team = await team_service.create_team(
+        team = team_service.create_team(
             db,
             name=request.name,
             description=request.description,
@@ -55,11 +55,11 @@ async def create_team(
     "",
     response_model=list[TeamResponse],
 )
-async def list_teams(
+def list_teams(
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> list[TeamResponse]:
-    teams = await team_service.list_teams_for_user(
+    teams = team_service.list_teams_for_user(
         db,
         user=current_user,
     )
@@ -71,7 +71,7 @@ async def list_teams(
     "/{team_id}",
     response_model=TeamResponse,
 )
-async def get_team(
+def get_team(
     team: Team = Depends(require_team_access),
 ) -> TeamResponse:
     return TeamResponse.model_validate(team)
@@ -81,13 +81,13 @@ async def get_team(
     "/{team_id}",
     response_model=TeamResponse,
 )
-async def update_team(
+def update_team(
     request: TeamUpdateRequest,
     team_id: UUID,
     current_user: User = Depends(require_team_manager_access),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> TeamResponse:
-    team = await team_service.get_team(
+    team = team_service.get_team(
         db,
         team_id=team_id,
     )
@@ -99,7 +99,7 @@ async def update_team(
         )
 
     try:
-        team = await team_service.update_team(
+        team = team_service.update_team(
             db,
             team=team,
             name=request.name,
@@ -118,12 +118,12 @@ async def update_team(
     "/{team_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def delete_team(
+def delete_team(
     team_id: UUID,
     current_user: User = Depends(require_roles(UserRole.ADMIN)),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> None:
-    team = await team_service.get_team(
+    team = team_service.get_team(
         db,
         team_id=team_id,
     )
@@ -135,7 +135,7 @@ async def delete_team(
         )
 
     try:
-        await team_service.delete_team(
+        team_service.delete_team(
             db,
             team=team,
         )
@@ -151,13 +151,13 @@ async def delete_team(
     response_model=TeamMemberResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def add_team_member(
+def add_team_member(
     team_id: UUID,
     user_id: UUID,
     current_user: User = Depends(require_team_manager_access),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> TeamMemberResponse:
-    team = await team_service.get_team(
+    team = team_service.get_team(
         db,
         team_id=team_id,
     )
@@ -169,7 +169,7 @@ async def add_team_member(
         )
 
     try:
-        membership = await team_service.add_member(
+        membership = team_service.add_member(
             db,
             team_id=team_id,
             user_id=user_id,
@@ -187,13 +187,13 @@ async def add_team_member(
     "/{team_id}/members/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-async def remove_team_member(
+def remove_team_member(
     team_id: UUID,
     user_id: UUID,
     current_user: User = Depends(require_team_manager_access),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> None:
-    removed = await team_service.remove_member(
+    removed = team_service.remove_member(
         db,
         team_id=team_id,
         user_id=user_id,
@@ -210,12 +210,12 @@ async def remove_team_member(
     "/{team_id}/members",
     response_model=list[TeamMemberResponse],
 )
-async def list_team_members(
+def list_team_members(
     team_id: UUID,
     current_user: User = Depends(require_team_access),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> list[TeamMemberResponse]:
-    members = await team_service.list_members(
+    members = team_service.list_members(
         db,
         team_id=team_id,
     )

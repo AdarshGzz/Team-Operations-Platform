@@ -1,29 +1,27 @@
 from uuid import UUID
 
-import pytest
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 
 from app.models.user import UserRole
 
 
-@pytest.mark.asyncio
-async def test_admin_can_create_team(
-    client: AsyncClient,
+def test_admin_can_create_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-team-create@example.com",
         role=UserRole.ADMIN,
         name="Admin",
     )
 
-    token = await login_user(
+    token = login_user(
         email=admin.email,
     )
 
-    response = await client.post(
+    response = client.post(
         "/teams",
         json={
             "name": "Engineering",
@@ -43,23 +41,22 @@ async def test_admin_can_create_team(
     UUID(data["id"])
 
 
-@pytest.mark.asyncio
-async def test_member_cannot_create_team(
-    client: AsyncClient,
+def test_member_cannot_create_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    member = await create_user(
+    member = create_user(
         email="member-create-team@example.com",
         role=UserRole.MEMBER,
     )
 
-    token = await login_user(
+    token = login_user(
         email=member.email,
     )
 
-    response = await client.post(
+    response = client.post(
         "/teams",
         json={
             "name": "Unauthorized Team",
@@ -70,23 +67,22 @@ async def test_member_cannot_create_team(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_manager_cannot_create_team(
-    client: AsyncClient,
+def test_manager_cannot_create_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    manager = await create_user(
+    manager = create_user(
         email="manager-create-team@example.com",
         role=UserRole.MANAGER,
     )
 
-    token = await login_user(
+    token = login_user(
         email=manager.email,
     )
 
-    response = await client.post(
+    response = client.post(
         "/teams",
         json={
             "name": "Unauthorized Team",
@@ -97,19 +93,18 @@ async def test_manager_cannot_create_team(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_duplicate_team_name_returns_conflict(
-    client: AsyncClient,
+def test_duplicate_team_name_returns_conflict(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-duplicate-team@example.com",
         role=UserRole.ADMIN,
     )
 
-    token = await login_user(
+    token = login_user(
         email=admin.email,
     )
 
@@ -118,7 +113,7 @@ async def test_duplicate_team_name_returns_conflict(
         "description": "First team",
     }
 
-    first_response = await client.post(
+    first_response = client.post(
         "/teams",
         json=payload,
         headers=auth_headers(token),
@@ -126,7 +121,7 @@ async def test_duplicate_team_name_returns_conflict(
 
     assert first_response.status_code == 201
 
-    second_response = await client.post(
+    second_response = client.post(
         "/teams",
         json={
             **payload,
@@ -138,23 +133,22 @@ async def test_duplicate_team_name_returns_conflict(
     assert second_response.status_code == 409
 
 
-@pytest.mark.asyncio
-async def test_authenticated_user_can_list_teams(
-    client: AsyncClient,
+def test_authenticated_user_can_list_teams(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-list-teams@example.com",
         role=UserRole.ADMIN,
     )
 
-    token = await login_user(
+    token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "List Engineering",
@@ -165,7 +159,7 @@ async def test_authenticated_user_can_list_teams(
 
     assert create_response.status_code == 201
 
-    response = await client.get(
+    response = client.get(
         "/teams",
         headers=auth_headers(token),
     )
@@ -178,36 +172,34 @@ async def test_authenticated_user_can_list_teams(
     assert any(team["name"] == "List Engineering" for team in data)
 
 
-@pytest.mark.asyncio
-async def test_user_without_token_cannot_list_teams(
-    client: AsyncClient,
+def test_user_without_token_cannot_list_teams(
+    client: TestClient,
 ):
-    response = await client.get("/teams")
+    response = client.get("/teams")
     assert response.status_code == 401
 
 
-@pytest.mark.asyncio
-async def test_team_member_can_access_team(
-    client: AsyncClient,
+def test_team_member_can_access_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-team-access@example.com",
         role=UserRole.ADMIN,
     )
 
-    member = await create_user(
+    member = create_user(
         email="member-team-access@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Member Access Team",
@@ -220,18 +212,18 @@ async def test_team_member_can_access_team(
 
     team_id = create_response.json()["id"]
 
-    member_response = await client.post(
+    member_response = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(admin_token),
     )
 
     assert member_response.status_code == 201
 
-    member_token = await login_user(
+    member_token = login_user(
         email=member.email,
     )
 
-    response = await client.get(
+    response = client.get(
         f"/teams/{team_id}",
         headers=auth_headers(member_token),
     )
@@ -244,28 +236,27 @@ async def test_team_member_can_access_team(
     assert data["name"] == "Member Access Team"
 
 
-@pytest.mark.asyncio
-async def test_non_member_cannot_access_team(
-    client: AsyncClient,
+def test_non_member_cannot_access_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-team-isolation@example.com",
         role=UserRole.ADMIN,
     )
 
-    outsider = await create_user(
+    outsider = create_user(
         email="outsider-team-isolation@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Private Team",
@@ -277,11 +268,11 @@ async def test_non_member_cannot_access_team(
 
     team_id = create_response.json()["id"]
 
-    outsider_token = await login_user(
+    outsider_token = login_user(
         email=outsider.email,
     )
 
-    response = await client.get(
+    response = client.get(
         f"/teams/{team_id}",
         headers=auth_headers(outsider_token),
     )
@@ -289,33 +280,32 @@ async def test_non_member_cannot_access_team(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_manager_can_update_team(
-    client: AsyncClient,
+def test_manager_can_update_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    manager = await create_user(
+    manager = create_user(
         email="manager-update-team@example.com",
         role=UserRole.MANAGER,
     )
 
-    token = await login_user(
+    token = login_user(
         email=manager.email,
     )
 
     # Manager needs membership before manager-level team access.
-    admin = await create_user(
+    admin = create_user(
         email="admin-manager-team@example.com",
         role=UserRole.ADMIN,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Manager Update Team",
@@ -327,14 +317,14 @@ async def test_manager_can_update_team(
 
     team_id = create_response.json()["id"]
 
-    membership_response = await client.post(
+    membership_response = client.post(
         f"/teams/{team_id}/members/{manager.id}",
         headers=auth_headers(admin_token),
     )
 
     assert membership_response.status_code == 201
 
-    response = await client.patch(
+    response = client.patch(
         f"/teams/{team_id}",
         json={
             "name": "Updated Manager Team",
@@ -351,28 +341,27 @@ async def test_manager_can_update_team(
     assert data["description"] == "Updated description"
 
 
-@pytest.mark.asyncio
-async def test_member_cannot_update_team(
-    client: AsyncClient,
+def test_member_cannot_update_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-member-update@example.com",
         role=UserRole.ADMIN,
     )
 
-    member = await create_user(
+    member = create_user(
         email="member-team-update@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Member Cannot Update",
@@ -384,18 +373,18 @@ async def test_member_cannot_update_team(
 
     team_id = create_response.json()["id"]
 
-    membership_response = await client.post(
+    membership_response = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(admin_token),
     )
 
     assert membership_response.status_code == 201
 
-    member_token = await login_user(
+    member_token = login_user(
         email=member.email,
     )
 
-    response = await client.patch(
+    response = client.patch(
         f"/teams/{team_id}",
         json={
             "name": "Unauthorized Update",
@@ -406,23 +395,22 @@ async def test_member_cannot_update_team(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_admin_can_delete_team(
-    client: AsyncClient,
+def test_admin_can_delete_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-delete-team@example.com",
         role=UserRole.ADMIN,
     )
 
-    token = await login_user(
+    token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Delete Team",
@@ -434,14 +422,14 @@ async def test_admin_can_delete_team(
 
     team_id = create_response.json()["id"]
 
-    response = await client.delete(
+    response = client.delete(
         f"/teams/{team_id}",
         headers=auth_headers(token),
     )
 
     assert response.status_code == 204
 
-    get_response = await client.get(
+    get_response = client.get(
         f"/teams/{team_id}",
         headers=auth_headers(token),
     )
@@ -449,28 +437,27 @@ async def test_admin_can_delete_team(
     assert get_response.status_code == 404
 
 
-@pytest.mark.asyncio
-async def test_manager_cannot_delete_team(
-    client: AsyncClient,
+def test_manager_cannot_delete_team(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-manager-delete@example.com",
         role=UserRole.ADMIN,
     )
 
-    manager = await create_user(
+    manager = create_user(
         email="manager-delete-team@example.com",
         role=UserRole.MANAGER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Manager Cannot Delete",
@@ -482,18 +469,18 @@ async def test_manager_cannot_delete_team(
 
     team_id = create_response.json()["id"]
 
-    membership_response = await client.post(
+    membership_response = client.post(
         f"/teams/{team_id}/members/{manager.id}",
         headers=auth_headers(admin_token),
     )
 
     assert membership_response.status_code == 201
 
-    manager_token = await login_user(
+    manager_token = login_user(
         email=manager.email,
     )
 
-    response = await client.delete(
+    response = client.delete(
         f"/teams/{team_id}",
         headers=auth_headers(manager_token),
     )
@@ -501,33 +488,32 @@ async def test_manager_cannot_delete_team(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_manager_can_add_member(
-    client: AsyncClient,
+def test_manager_can_add_member(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-add-member@example.com",
         role=UserRole.ADMIN,
     )
 
-    manager = await create_user(
+    manager = create_user(
         email="manager-add-member@example.com",
         role=UserRole.MANAGER,
     )
 
-    member = await create_user(
+    member = create_user(
         email="member-add-member@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Membership Team",
@@ -539,18 +525,18 @@ async def test_manager_can_add_member(
 
     team_id = create_response.json()["id"]
 
-    manager_membership = await client.post(
+    manager_membership = client.post(
         f"/teams/{team_id}/members/{manager.id}",
         headers=auth_headers(admin_token),
     )
 
     assert manager_membership.status_code == 201
 
-    manager_token = await login_user(
+    manager_token = login_user(
         email=manager.email,
     )
 
-    member_response = await client.post(
+    member_response = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(manager_token),
     )
@@ -563,28 +549,27 @@ async def test_manager_can_add_member(
     assert data["user_id"] == str(member.id)
 
 
-@pytest.mark.asyncio
-async def test_duplicate_team_membership_returns_conflict(
-    client: AsyncClient,
+def test_duplicate_team_membership_returns_conflict(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-duplicate-member@example.com",
         role=UserRole.ADMIN,
     )
 
-    member = await create_user(
+    member = create_user(
         email="member-duplicate-member@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Duplicate Membership Team",
@@ -596,14 +581,14 @@ async def test_duplicate_team_membership_returns_conflict(
 
     team_id = create_response.json()["id"]
 
-    first_response = await client.post(
+    first_response = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(admin_token),
     )
 
     assert first_response.status_code == 201
 
-    second_response = await client.post(
+    second_response = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(admin_token),
     )
@@ -611,33 +596,32 @@ async def test_duplicate_team_membership_returns_conflict(
     assert second_response.status_code == 409
 
 
-@pytest.mark.asyncio
-async def test_manager_can_remove_member(
-    client: AsyncClient,
+def test_manager_can_remove_member(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-remove-member@example.com",
         role=UserRole.ADMIN,
     )
 
-    manager = await create_user(
+    manager = create_user(
         email="manager-remove-member@example.com",
         role=UserRole.MANAGER,
     )
 
-    member = await create_user(
+    member = create_user(
         email="member-remove-member@example.com",
         role=UserRole.MEMBER,
     )
 
-    admin_token = await login_user(
+    admin_token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Remove Member Team",
@@ -649,32 +633,32 @@ async def test_manager_can_remove_member(
 
     team_id = create_response.json()["id"]
 
-    manager_membership = await client.post(
+    manager_membership = client.post(
         f"/teams/{team_id}/members/{manager.id}",
         headers=auth_headers(admin_token),
     )
 
     assert manager_membership.status_code == 201
 
-    manager_token = await login_user(
+    manager_token = login_user(
         email=manager.email,
     )
 
-    member_membership = await client.post(
+    member_membership = client.post(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(manager_token),
     )
 
     assert member_membership.status_code == 201
 
-    response = await client.delete(
+    response = client.delete(
         f"/teams/{team_id}/members/{member.id}",
         headers=auth_headers(manager_token),
     )
 
     assert response.status_code == 204
 
-    members_response = await client.get(
+    members_response = client.get(
         f"/teams/{team_id}/members",
         headers=auth_headers(manager_token),
     )
@@ -686,23 +670,22 @@ async def test_manager_can_remove_member(
     assert all(member_data["user_id"] != str(member.id) for member_data in members)
 
 
-@pytest.mark.asyncio
-async def test_cannot_delete_team_with_tasks(
-    client: AsyncClient,
+def test_cannot_delete_team_with_tasks(
+    client: TestClient,
     create_user,
     login_user,
     auth_headers,
 ):
-    admin = await create_user(
+    admin = create_user(
         email="admin-delete-team-tasks@example.com",
         role=UserRole.ADMIN,
     )
 
-    token = await login_user(
+    token = login_user(
         email=admin.email,
     )
 
-    create_response = await client.post(
+    create_response = client.post(
         "/teams",
         json={
             "name": "Team With Tasks",
@@ -714,7 +697,7 @@ async def test_cannot_delete_team_with_tasks(
 
     team_id = create_response.json()["id"]
 
-    task_response = await client.post(
+    task_response = client.post(
         f"/teams/{team_id}/tasks",
         json={
             "title": "Blocking task",
@@ -724,7 +707,7 @@ async def test_cannot_delete_team_with_tasks(
 
     assert task_response.status_code == 201
 
-    response = await client.delete(
+    response = client.delete(
         f"/teams/{team_id}",
         headers=auth_headers(token),
     )
@@ -735,7 +718,7 @@ async def test_cannot_delete_team_with_tasks(
     )
 
     # The team must survive the rejected delete.
-    get_response = await client.get(
+    get_response = client.get(
         f"/teams/{team_id}",
         headers=auth_headers(token),
     )

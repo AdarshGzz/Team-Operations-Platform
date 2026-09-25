@@ -1,18 +1,16 @@
 from uuid import uuid4
 
-import pytest
-from httpx import AsyncClient
+from fastapi.testclient import TestClient
 
 from app.models.user import UserRole
 
 
-@pytest.mark.asyncio
-async def test_admin_can_list_users(
-    client: AsyncClient,
+def test_admin_can_list_users(
+    client: TestClient,
     admin_token: str,
     member_token: str,
 ) -> None:
-    response = await client.get(
+    response = client.get(
         "/users",
         headers={
             "Authorization": f"Bearer {admin_token}",
@@ -34,12 +32,11 @@ async def test_admin_can_list_users(
         assert "is_active" in user
 
 
-@pytest.mark.asyncio
-async def test_manager_cannot_list_users(
-    client: AsyncClient,
+def test_manager_cannot_list_users(
+    client: TestClient,
     manager_token: str,
 ) -> None:
-    response = await client.get(
+    response = client.get(
         "/users",
         headers={
             "Authorization": f"Bearer {manager_token}",
@@ -49,12 +46,11 @@ async def test_manager_cannot_list_users(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_member_cannot_list_users(
-    client: AsyncClient,
+def test_member_cannot_list_users(
+    client: TestClient,
     member_token: str,
 ) -> None:
-    response = await client.get(
+    response = client.get(
         "/users",
         headers={
             "Authorization": f"Bearer {member_token}",
@@ -64,22 +60,20 @@ async def test_member_cannot_list_users(
     assert response.status_code == 403
 
 
-@pytest.mark.asyncio
-async def test_unauthenticated_user_cannot_list_users(
-    client: AsyncClient,
+def test_unauthenticated_user_cannot_list_users(
+    client: TestClient,
 ) -> None:
-    response = await client.get("/users")
+    response = client.get("/users")
 
     assert response.status_code == 401
 
 
-@pytest.mark.asyncio
-async def test_admin_can_get_user(
-    client: AsyncClient,
+def test_admin_can_get_user(
+    client: TestClient,
     admin_token: str,
     member_id,
 ) -> None:
-    response = await client.get(
+    response = client.get(
         f"/users/{member_id}",
         headers={
             "Authorization": f"Bearer {admin_token}",
@@ -97,14 +91,13 @@ async def test_admin_can_get_user(
     assert "is_active" in data
 
 
-@pytest.mark.asyncio
-async def test_get_unknown_user_returns_404(
-    client: AsyncClient,
+def test_get_unknown_user_returns_404(
+    client: TestClient,
     admin_token: str,
 ) -> None:
     unknown_user_id = uuid4()
 
-    response = await client.get(
+    response = client.get(
         f"/users/{unknown_user_id}",
         headers={
             "Authorization": f"Bearer {admin_token}",
@@ -115,13 +108,12 @@ async def test_get_unknown_user_returns_404(
     assert response.json()["detail"] == "User not found"
 
 
-@pytest.mark.asyncio
-async def test_admin_can_update_user_role(
-    client: AsyncClient,
+def test_admin_can_update_user_role(
+    client: TestClient,
     admin_token: str,
     member_id,
 ) -> None:
-    response = await client.patch(
+    response = client.patch(
         f"/users/{member_id}",
         headers={
             "Authorization": f"Bearer {admin_token}",
@@ -140,13 +132,12 @@ async def test_admin_can_update_user_role(
     assert data["is_active"] is True
 
 
-@pytest.mark.asyncio
-async def test_admin_can_deactivate_user(
-    client: AsyncClient,
+def test_admin_can_deactivate_user(
+    client: TestClient,
     admin_token: str,
     member_id,
 ) -> None:
-    response = await client.patch(
+    response = client.patch(
         f"/users/{member_id}",
         headers={
             "Authorization": f"Bearer {admin_token}",
@@ -164,13 +155,12 @@ async def test_admin_can_deactivate_user(
     assert data["is_active"] is False
 
 
-@pytest.mark.asyncio
-async def test_admin_cannot_deactivate_self(
-    client: AsyncClient,
+def test_admin_cannot_deactivate_self(
+    client: TestClient,
     admin_token: str,
     admin_id,
 ) -> None:
-    response = await client.patch(
+    response = client.patch(
         f"/users/{admin_id}",
         headers={
             "Authorization": f"Bearer {admin_token}",

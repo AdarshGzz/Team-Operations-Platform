@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.models.task import Task, TaskPriority, TaskStatus
 from app.models.task_event import TaskEvent, TaskEventType
@@ -11,14 +11,14 @@ from app.models.user import User
 
 
 class TaskService:
-    async def validate_assignee(
+    def validate_assignee(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
         assignee_id: UUID,
     ) -> User:
-        result = await db.execute(
+        result = db.execute(
             select(User)
             .join(
                 TeamMember,
@@ -38,9 +38,9 @@ class TaskService:
 
         return user
 
-    async def create_task(
+    def create_task(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
         created_by: UUID,
@@ -51,7 +51,7 @@ class TaskService:
         due_at: datetime | None,
     ) -> Task:
         if assignee_id is not None:
-            await self.validate_assignee(
+            self.validate_assignee(
                 db,
                 team_id=team_id,
                 assignee_id=assignee_id,
@@ -69,7 +69,7 @@ class TaskService:
 
         db.add(task)
 
-        await db.flush()
+        db.flush()
 
         db.add(
             TaskEvent(
@@ -93,18 +93,18 @@ class TaskService:
                 )
             )
 
-        await db.commit()
-        await db.refresh(task)
+        db.commit()
+        db.refresh(task)
 
         return task
 
-    async def get_task(
+    def get_task(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         task_id: UUID,
     ) -> Task | None:
-        result = await db.execute(
+        result = db.execute(
             select(Task).where(
                 Task.id == task_id,
             )
@@ -112,21 +112,21 @@ class TaskService:
 
         return result.scalar_one_or_none()
 
-    async def list_team_tasks(
+    def list_team_tasks(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         team_id: UUID,
     ) -> list[Task]:
-        result = await db.execute(
+        result = db.execute(
             select(Task).where(Task.team_id == team_id).order_by(Task.created_at.desc())
         )
 
         return list(result.scalars().all())
 
-    async def update_task(
+    def update_task(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         task: Task,
         title: str | None,
@@ -138,7 +138,7 @@ class TaskService:
         old_assignee_id = task.assignee_id
 
         if assignee_id is not None and assignee_id != old_assignee_id:
-            await self.validate_assignee(
+            self.validate_assignee(
                 db,
                 team_id=task.team_id,
                 assignee_id=assignee_id,
@@ -195,14 +195,14 @@ class TaskService:
                 )
             )
 
-        await db.commit()
-        await db.refresh(task)
+        db.commit()
+        db.refresh(task)
 
         return task
 
-    async def update_status(
+    def update_status(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         task: Task,
         status: TaskStatus,
@@ -235,27 +235,27 @@ class TaskService:
             )
         )
 
-        await db.commit()
-        await db.refresh(task)
+        db.commit()
+        db.refresh(task)
 
         return task
 
-    async def delete_task(
+    def delete_task(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         task: Task,
     ) -> None:
-        await db.delete(task)
-        await db.commit()
+        db.delete(task)
+        db.commit()
 
-    async def list_events(
+    def list_events(
         self,
-        db: AsyncSession,
+        db: Session,
         *,
         task_id: UUID,
     ) -> list[TaskEvent]:
-        result = await db.execute(
+        result = db.execute(
             select(TaskEvent)
             .where(TaskEvent.task_id == task_id)
             .order_by(TaskEvent.created_at.asc())

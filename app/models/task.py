@@ -1,17 +1,9 @@
 import enum
-import uuid
-from datetime import datetime
-from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, String, Text
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy.orm import relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
-
-if TYPE_CHECKING:
-    from app.models.task_event import TaskEvent
-    from app.models.team import Team
-    from app.models.user import User
 
 
 class TaskStatus(enum.StrEnum):
@@ -31,68 +23,75 @@ class TaskPriority(enum.StrEnum):
 class Task(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "tasks"
 
-    title: Mapped[str] = mapped_column(
+    title = Column(
         String(200),
         nullable=False,
     )
 
-    description: Mapped[str | None] = mapped_column(
+    description = Column(
         Text,
         nullable=True,
     )
 
-    team_id: Mapped[uuid.UUID] = mapped_column(
+    team_id = Column(
+        Uuid,
         ForeignKey("teams.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
-    created_by: Mapped[uuid.UUID] = mapped_column(
+    created_by = Column(
+        Uuid,
         ForeignKey("users.id", ondelete="RESTRICT"),
         nullable=False,
     )
 
-    assignee_id: Mapped[uuid.UUID | None] = mapped_column(
+    assignee_id = Column(
+        Uuid,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
 
-    status: Mapped[TaskStatus] = mapped_column(
+    status = Column(
         Enum(TaskStatus, name="task_status"),
         nullable=False,
         default=TaskStatus.TODO,
     )
 
-    priority: Mapped[TaskPriority] = mapped_column(
+    priority = Column(
         Enum(TaskPriority, name="task_priority"),
         nullable=False,
         default=TaskPriority.MEDIUM,
     )
 
-    due_at: Mapped[datetime | None] = mapped_column(
+    due_at = Column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    completed_at: Mapped[datetime | None] = mapped_column(
+    completed_at = Column(
         DateTime(timezone=True),
         nullable=True,
     )
 
-    team: Mapped["Team"] = relationship(
+    team = relationship(
+        "Team",
         back_populates="tasks",
     )
 
-    creator: Mapped["User"] = relationship(
+    creator = relationship(
+        "User",
         foreign_keys=[created_by],
         back_populates="created_tasks",
     )
 
-    assignee: Mapped["User | None"] = relationship(
+    assignee = relationship(
+        "User",
         foreign_keys=[assignee_id],
         back_populates="assigned_tasks",
     )
 
-    events: Mapped[list["TaskEvent"]] = relationship(
+    events = relationship(
+        "TaskEvent",
         back_populates="task",
         cascade="all, delete-orphan",
     )

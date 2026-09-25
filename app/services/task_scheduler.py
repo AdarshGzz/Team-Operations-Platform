@@ -1,22 +1,21 @@
-import asyncio
-import logging
+import threading
 from datetime import UTC, datetime
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from app.core.database import AsyncSessionLocal
+from app.core.database import SessionLocal
 from app.models.task import Task, TaskStatus
 from app.models.task_event import TaskEvent, TaskEventType
 
-logger = logging.getLogger(__name__)
-
-
 OVERDUE_CHECK_INTERVAL_SECONDS = 300
 
+_stop_event = threading.Event()
+_scheduler_thread: threading.Thread | None = None
 
-async def process_overdue_tasks(
-    db: AsyncSession | None = None,
+
+def process_overdue_tasks(
+    db: Session | None = None,
 ) -> int:
     """
     Find active tasks whose due date has passed and mark them
@@ -30,16 +29,16 @@ async def process_overdue_tasks(
     """
 
     if db is None:
-        async with AsyncSessionLocal() as session:
-            return await _mark_overdue_tasks(session)
+        with SessionLocal() as session:
+            return _mark_overdue_tasks(session)
 
-    return await _mark_overdue_tasks(db)
+    return _mark_overdue_tasks(db)
 
 
-async def _mark_overdue_tasks(db: AsyncSession) -> int:
+def _mark_overdue_tasks(db: Session) -> int:
     now = datetime.now(UTC)
 
-    result = await db.execute(
+    result = db.execute(
         select(Task).where(
             Task.due_at.is_not(None),
             Task.due_at < now,
@@ -70,35 +69,57 @@ async def _mark_overdue_tasks(db: AsyncSession) -> int:
             )
         )
 
-    await db.commit()
+    db.commit()
 
     return len(tasks)
 
 
-async def overdue_task_scheduler() -> None:
+def overdue_task_scheduler() -> None:
     """
     Continuously check for overdue tasks.
 
     The scheduler runs independently from API request handling.
     """
 
-    logger.info("Overdue task scheduler started")
-
-    while True:
+    while not _stop_event.is_set():
         try:
-            updated_count = await process_overdue_tasks()
-
-            if updated_count:
-                logger.info(
-                    "Marked %d task(s) as overdue",
-                    updated_count,
-                )
-
-        except asyncio.CancelledError:
-            logger.info("Overdue task scheduler stopped")
-            raise
+            process_overdue_tasks()
 
         except Exception:
-            logger.exception("Error while processing overdue tasks")
+            pass
 
-        await asyncio.sleep(OVERDUE_CHECK_INTERVAL_SECONDS)
+        _stop_event.wait(OVERDUE_CHECK_INTERVAL_SECONDS)
+
+
+def start_overdue_task_scheduler() -> None:
+    """
+    Start the overdue task scheduler on a background thread.
+    """
+
+    global _scheduler_thread
+
+    if _scheduler_thread is not None and _scheduler_thread.is_alive():
+        return
+
+    _stop_event.clear()
+
+    _scheduler_thread = threading.Thread(
+        target=overdue_task_scheduler,
+        name="overdue-task-scheduler",
+        daemon=True,
+    )
+    _scheduler_thread.start()
+
+
+def stop_overdue_task_scheduler() -> None:
+    """
+    Signal the overdue task scheduler to stop and wait for it.
+    """
+
+    global _scheduler_thread
+
+    _stop_event.set()
+
+    if _scheduler_thread is not None:
+        _scheduler_thread.join()
+        _scheduler_thread = None

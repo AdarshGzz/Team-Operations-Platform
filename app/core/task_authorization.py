@@ -2,7 +2,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db_session
@@ -11,10 +11,10 @@ from app.models.team_member import TeamMember
 from app.models.user import User, UserRole
 
 
-async def require_team_task_access(
+def require_team_task_access(
     team_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> User:
     """
     Verify that the current user can access resources
@@ -28,7 +28,7 @@ async def require_team_task_access(
     """
     if current_user.role == UserRole.ADMIN:
         return current_user
-    result = await db.execute(
+    result = db.execute(
         select(TeamMember).where(
             TeamMember.team_id == team_id,
             TeamMember.user_id == current_user.id,
@@ -43,10 +43,10 @@ async def require_team_task_access(
     return current_user
 
 
-async def require_task_view_access(
+def require_task_view_access(
     task_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> User:
     """
     Verify that the current user can view a task.
@@ -57,7 +57,7 @@ async def require_task_view_access(
     MEMBER:
         Can view tasks belonging to their teams.
     """
-    result = await db.execute(select(Task).where(Task.id == task_id))
+    result = db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
     if task is None:
         raise HTTPException(
@@ -66,7 +66,7 @@ async def require_task_view_access(
         )
     if current_user.role == UserRole.ADMIN:
         return current_user
-    membership_result = await db.execute(
+    membership_result = db.execute(
         select(TeamMember).where(
             TeamMember.team_id == task.team_id,
             TeamMember.user_id == current_user.id,
@@ -81,10 +81,10 @@ async def require_task_view_access(
     return current_user
 
 
-async def require_task_manage_access(
+def require_task_manage_access(
     task_id: UUID,
     current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db_session),
+    db: Session = Depends(get_db_session),
 ) -> User:
     """
     Verify that the current user can modify a task.
@@ -95,7 +95,7 @@ async def require_task_manage_access(
     MEMBER:
         Can modify only tasks assigned to them.
     """
-    result = await db.execute(select(Task).where(Task.id == task_id))
+    result = db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
     if task is None:
         raise HTTPException(
@@ -105,7 +105,7 @@ async def require_task_manage_access(
     if current_user.role == UserRole.ADMIN:
         return current_user
     if current_user.role == UserRole.MANAGER:
-        membership_result = await db.execute(
+        membership_result = db.execute(
             select(TeamMember).where(
                 TeamMember.team_id == task.team_id,
                 TeamMember.user_id == current_user.id,
