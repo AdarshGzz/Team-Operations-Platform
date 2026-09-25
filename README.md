@@ -8,6 +8,18 @@ FastAPI · SQLAlchemy 2.0 (async) · PostgreSQL · Alembic. An in-process schedu
 
 ---
 
+## 🚀 Live Deployment
+
+The backend API is deployed on an Oracle Cloud Always Free VPS.
+
+- **API base URL** — http://130.210.28.113
+- **Swagger / API documentation** — http://130.210.28.113/docs
+- **Health check** — http://130.210.28.113/health
+
+The frontend is not deployed as part of this submission. The deployment currently exposes the backend API only.
+
+---
+
 ## Assignment Requirements → Implementation
 
 | Requirement | Implementation |
