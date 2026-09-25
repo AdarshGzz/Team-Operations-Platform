@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.api.routes.auth import router as auth_router
+from app.api.routes.teams import router as teams_router
 from app.api.routes.users import router as users_router
 from app.core.database import AsyncSessionLocal
 
@@ -25,3 +26,4 @@ async def database_health_check() -> dict[str, str]:
 
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(teams_router)

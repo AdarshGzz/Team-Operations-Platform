@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 class TaskEventType(enum.StrEnum):
     CREATED = "CREATED"
+    UPDATED = "UPDATED"
     ASSIGNED = "ASSIGNED"
     STATUS_CHANGED = "STATUS_CHANGED"
     OVERDUE = "OVERDUE"
