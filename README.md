@@ -1,3 +1,5 @@
+![Team Operations Platform](docs/images/banner.jpg)
+
 # Team Operations Platform
 
 A REST API for managing **users**, **teams**, and **tasks**, with role-based access control and an append-only audit trail of every change made to a task.
@@ -504,7 +506,9 @@ Assignment/
 │   ├── models/               # base mixins + user, team, team_member, task, task_event
 │   ├── schemas/              # Pydantic request/response models
 │   └── services/             # auth, users, team, task, task_scheduler
-├── docs/engineering-details.md   # Alembic revision history, per-file test breakdown
+├── docs/
+│   ├── engineering-details.md    # Alembic revision history, per-file test breakdown
+│   └── images/banner.jpg         # banner shown at the top of this README
 ├── migrations/               # async env.py, script.py.mako, six revisions
 ├── scripts/create_admin.py   # interactive admin bootstrap
 ├── tests/                    # conftest.py + seven test modules
